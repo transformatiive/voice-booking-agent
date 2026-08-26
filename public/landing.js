@@ -61,6 +61,31 @@ document.getElementById("onboardForm").addEventListener("submit", async (e) => {
   else alert("Não foi possível criar o assistente. Tente novamente.");
 });
 
+/* ---------- Mensagens de validação em português ---------- */
+function ptValidationMessage(el) {
+  const v = el.validity;
+  if (v.valueMissing) return el.tagName === "SELECT" ? "Selecione uma opção." : "Preencha este campo.";
+  if (v.typeMismatch) return el.type === "email" ? "Introduza um email válido." : "Valor inválido.";
+  if (v.tooShort) return `Use pelo menos ${el.minLength} caracteres.`;
+  if (v.tooLong) return `Use no máximo ${el.maxLength} caracteres.`;
+  if (v.rangeUnderflow) return `O valor mínimo é ${el.min}.`;
+  if (v.rangeOverflow) return `O valor máximo é ${el.max}.`;
+  if (v.stepMismatch) return "Introduza um valor válido.";
+  if (v.patternMismatch) return "O formato não é válido.";
+  if (v.badInput) return "Introduza um valor válido.";
+  return "Preencha este campo corretamente.";
+}
+function localizeValidation(form) {
+  if (!form) return;
+  form.querySelectorAll("input, select, textarea").forEach((el) => {
+    el.addEventListener("invalid", () => el.setCustomValidity(ptValidationMessage(el)));
+    const clear = () => el.setCustomValidity("");
+    el.addEventListener("input", clear);
+    el.addEventListener("change", clear);
+  });
+}
+localizeValidation(document.getElementById("onboardForm"));
+
 /* ---------- Reveal ---------- */
 let revealObserver;
 function observeReveals() {
