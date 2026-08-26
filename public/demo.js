@@ -1,6 +1,7 @@
 const slug = location.pathname.split("/").pop();
 const sessionId = `web-${Math.random().toString(36).slice(2)}`;
 let locale = "pt";
+let tz = "Europe/Lisbon";
 
 const messagesEl = document.getElementById("messages");
 const bookingsEl = document.getElementById("bookings");
@@ -45,7 +46,7 @@ async function refreshBookings() {
       return;
     }
     for (const b of list) {
-      const when = new Date(b.start).toLocaleString("pt-PT", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      const when = new Date(b.start).toLocaleString("pt-PT", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: tz });
       const li = document.createElement("li");
       li.innerHTML = `<div>${b.serviceName}${b.customerName ? " · " + b.customerName : ""}</div><div class="when">${when}</div>`;
       bookingsEl.appendChild(li);
@@ -103,6 +104,7 @@ async function init() {
     const data = await res.json();
     const b = data.business;
     locale = b.locale;
+    tz = b.timezone || "Europe/Lisbon";
     document.getElementById("bizName").textContent = b.name;
     document.getElementById("bizMeta").textContent = `${b.plan.name} · ${b.number ? b.number.e164 : "sem número"} · assistente ${b.agentName}`;
     rec_lang_update();

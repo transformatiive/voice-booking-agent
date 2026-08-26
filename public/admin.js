@@ -283,7 +283,7 @@ function renderBookings() {
   const body = list.length
     ? list.map((bk) => {
         const d = new Date(bk.start);
-        const when = d.toLocaleString("pt-PT", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+        const when = d.toLocaleString("pt-PT", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: state.business.timezone || "Europe/Lisbon" });
         return `<div class="list-item"><div><strong>${bk.serviceName}</strong>${bk.customerName ? " · " + bk.customerName : ""}<div class="muted" style="font-size:13px">${when} · ${bk.source}</div></div></div>`;
       }).join("")
     : `<p class="muted">Sem marcações ainda.</p>`;
