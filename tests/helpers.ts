@@ -2,10 +2,11 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/store/store.js";
+import { FilePersistence } from "../src/store/persistence.js";
 import type { Business } from "../src/domain/types.js";
 
 export function tempStore(): Store {
-  return new Store(mkdtempSync(join(tmpdir(), "atende-test-")));
+  return new Store(new FilePersistence(mkdtempSync(join(tmpdir(), "atende-test-"))));
 }
 
 export function serviceId(business: Business, nameIncludes: string): string {

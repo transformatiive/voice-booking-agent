@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import type {
   AgentGender,
   Booking,
@@ -11,6 +9,8 @@ import type {
 } from "../domain/types.js";
 import { defaultHours, defaultServices } from "../domain/catalog.js";
 import { getPlan } from "../domain/plans.js";
+import type { Db, Persistence } from "./persistence.js";
+import { emptyDb } from "./persistence.js";
 
 export interface CreateBusinessInput {
   name: string;
@@ -20,11 +20,6 @@ export interface CreateBusinessInput {
   agentGender: AgentGender;
   planId: PlanId;
   timezone?: string;
-}
-
-interface Db {
-  businesses: Business[];
-  bookings: Booking[];
 }
 
 function slugify(name: string): string {
@@ -38,23 +33,38 @@ function slugify(name: string): string {
 }
 
 export class Store {
-  private db: Db = { businesses: [], bookings: [] };
-  private readonly file: string;
+  private db: Db = emptyDb();
+  /** Serializes async persists so the latest state always wins. */
+  private persisting: Promise<void> = Promise.resolve();
 
-  constructor(dataDir: string) {
-    mkdirSync(dataDir, { recursive: true });
-    this.file = join(dataDir, "db.json");
-    if (existsSync(this.file)) {
-      try {
-        this.db = JSON.parse(readFileSync(this.file, "utf8")) as Db;
-      } catch {
-        this.db = { businesses: [], bookings: [] };
-      }
+  constructor(private readonly persistence: Persistence) {
+    const loaded = persistence.loadSync?.();
+    if (loaded) {
+      this.db = loaded;
     }
   }
 
+  /** Load durable state for async backends (e.g. Postgres). Call once at startup. */
+  async init(): Promise<void> {
+    if (this.persistence.init) {
+      await this.persistence.init();
+    }
+    if (this.persistence.load) {
+      this.db = await this.persistence.load();
+    }
+  }
+
+  /** Wait for all pending writes to flush (useful in tests/shutdown). */
+  async flush(): Promise<void> {
+    await this.persisting;
+  }
+
   private persist(): void {
-    writeFileSync(this.file, JSON.stringify(this.db, null, 2), "utf8");
+    this.persisting = this.persisting
+      .then(() => this.persistence.persist(this.db))
+      .catch((err) => {
+        console.error("[store] persist failed:", err instanceof Error ? err.message : err);
+      });
   }
 
   listBusinesses(): Business[] {
