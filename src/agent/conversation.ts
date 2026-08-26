@@ -1,58 +1,74 @@
-import type { Booking, ServiceId } from "../types.js";
-import { getService, SERVICES } from "../booking/catalog.js";
-import { checkAvailability, suggestSlots } from "../booking/availability.js";
-import type { BookingStore } from "../booking/store.js";
+import type { Booking, Business, BookingSource, Locale, Service } from "../domain/types.js";
+import type { Store } from "../store/store.js";
+import type { Scheduler } from "../scheduling/scheduler.js";
+import { checkAvailability, suggestSlots } from "../scheduling/availability.js";
+import type { Unavailable } from "../scheduling/availability.js";
 import { parseMessage } from "./nlu.js";
 
 interface SessionState {
-  service: ServiceId | null;
+  serviceId: string | null;
   start: Date | null;
   customerName: string | null;
+  customerPhone: string | null;
   awaitingConfirmation: boolean;
   askedName: boolean;
 }
 
 export interface AgentReply {
   reply: string;
-  /** Present when a booking was created during this turn. */
   booking?: Booking;
-  /** Present for list/availability answers so the UI can render structured data. */
   bookings?: Booking[];
 }
 
 function newSession(): SessionState {
   return {
-    service: null,
+    serviceId: null,
     start: null,
     customerName: null,
+    customerPhone: null,
     awaitingConfirmation: false,
     askedName: false,
   };
 }
 
-function formatDateTime(date: Date): string {
-  return date.toLocaleString("en-US", {
+function bcp47(locale: Locale): string {
+  return locale === "pt" ? "pt-PT" : "en-US";
+}
+
+function formatDateTime(date: Date, business: Business): string {
+  return new Intl.DateTimeFormat(bcp47(business.locale), {
     weekday: "long",
-    month: "long",
     day: "numeric",
-    hour: "numeric",
+    month: "long",
+    hour: "2-digit",
     minute: "2-digit",
-  });
+    timeZone: business.timezone,
+  }).format(date);
 }
 
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+function formatTime(date: Date, business: Business): string {
+  return new Intl.DateTimeFormat(bcp47(business.locale), {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: business.timezone,
+  }).format(date);
 }
 
-function servicesSentence(): string {
-  return SERVICES.map((s) => `${s.name} (${s.durationMinutes} min)`).join(", ");
+function servicesSentence(business: Business): string {
+  return business.services
+    .map((s) => {
+      const price = s.priceCents !== null ? ` (${(s.priceCents / 100).toFixed(0)}€)` : "";
+      return `${s.name}${price}`;
+    })
+    .join(", ");
 }
 
 export class ConversationManager {
   private readonly sessions = new Map<string, SessionState>();
 
   constructor(
-    private readonly store: BookingStore,
+    private readonly store: Store,
+    private readonly scheduler: Scheduler,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -69,73 +85,86 @@ export class ConversationManager {
     this.sessions.set(sessionId, newSession());
   }
 
-  handle(sessionId: string, text: string): AgentReply {
+  private service(business: Business, id: string | null): Service | null {
+    return business.services.find((s) => s.id === id) ?? null;
+  }
+
+  async handle(
+    business: Business,
+    sessionId: string,
+    text: string,
+    customerPhone: string | null = null,
+    source: BookingSource = "web",
+  ): Promise<AgentReply> {
     const state = this.session(sessionId);
-    const now = this.now();
-    const parsed = parseMessage(text, now);
+    if (customerPhone) {
+      state.customerPhone = customerPhone;
+    }
+    const parsed = parseMessage(business, text, this.now());
+    const L = business.locale;
 
     if (parsed.customerName) {
       state.customerName = parsed.customerName;
     }
 
-    // If we asked for a name and got a plain short answer, treat it as the name.
     if (state.askedName && !parsed.customerName && parsed.intent === "unknown") {
       const trimmed = text.trim();
-      if (/^[a-z][a-z' -]{1,40}$/i.test(trimmed)) {
-        state.customerName = trimmed.replace(/\b\w/g, (c) => c.toUpperCase());
+      if (/^[\p{L}][\p{L}' -]{1,40}$/u.test(trimmed)) {
+        state.customerName = trimmed.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
       }
       state.askedName = false;
-      return this.progressBooking(state);
+      return this.progressBooking(business, state, source);
     }
 
     switch (parsed.intent) {
       case "greeting":
-        return {
-          reply:
-            "Hi! I'm your booking assistant. I can schedule appointments for you. " +
-            `We offer: ${servicesSentence()}. What would you like to book?`,
-        };
+        return { reply: greeting(business) };
       case "help":
         return {
           reply:
-            "Tell me what you'd like to book and when, for example: " +
-            '"Book a haircut tomorrow at 3pm". You can also ask "what services do you offer?", ' +
-            'check availability, or say "show my appointments".',
+            L === "pt"
+              ? `Diga-me o que pretende marcar e quando, por exemplo: "Marcar corte amanhã às 15h". Também pode perguntar pelos serviços ou pela disponibilidade.`
+              : `Tell me what you'd like to book and when, e.g. "Book a haircut tomorrow at 3pm". You can also ask about services or availability.`,
         };
       case "list_services":
-        return { reply: `Here's what we offer: ${servicesSentence()}. Which one would you like?` };
+        return {
+          reply:
+            L === "pt"
+              ? `Oferecemos: ${servicesSentence(business)}. Qual pretende?`
+              : `We offer: ${servicesSentence(business)}. Which one would you like?`,
+        };
       case "list_bookings": {
-        const bookings = this.store.list();
+        const bookings = this.store.listBookings(business.id);
         if (bookings.length === 0) {
-          return { reply: "You don't have any appointments booked yet.", bookings };
+          return { reply: L === "pt" ? "Ainda não tem marcações." : "You have no appointments yet.", bookings };
         }
-        const lines = bookings.map(
-          (b) => `- ${b.serviceName} on ${formatDateTime(new Date(b.start))}` +
-            (b.customerName ? ` for ${b.customerName}` : ""),
-        );
-        return { reply: `Here are the booked appointments:\n${lines.join("\n")}`, bookings };
+        const lines = bookings.map((b) => `- ${b.serviceName} — ${formatDateTime(new Date(b.start), business)}`);
+        return {
+          reply: `${L === "pt" ? "As marcações:" : "Appointments:"}\n${lines.join("\n")}`,
+          bookings,
+        };
       }
       case "cancel":
-        return this.handleCancel(parsed.service);
+        return this.handleCancel(business, parsed.serviceId);
       case "check_availability":
-        return this.handleAvailability(state, parsed.service, parsed.dateTime);
+        return this.handleAvailability(business, state, parsed.serviceId, parsed.dateTime);
       case "affirm":
-        return this.handleAffirm(state);
+        return this.handleAffirm(business, state, source);
       case "deny":
-        return this.handleDeny(state);
+        return this.handleDeny(business, state);
       case "book":
-        if (parsed.service) {
-          state.service = parsed.service;
+        if (parsed.serviceId) {
+          state.serviceId = parsed.serviceId;
         }
         if (parsed.dateTime && !parsed.dateOnly) {
           state.start = new Date(parsed.dateTime);
         } else if (parsed.dateTime && parsed.dateOnly) {
-          return this.handleAvailability(state, state.service, parsed.dateTime);
+          return this.handleAvailability(business, state, state.serviceId, parsed.dateTime);
         }
         state.awaitingConfirmation = false;
-        return this.progressBooking(state);
+        return this.progressBooking(business, state, source);
       case "unknown":
-        return this.progressBooking(state, true);
+        return this.progressBooking(business, state, source, true);
       default: {
         const exhaustive: never = parsed.intent;
         throw new Error(`Unhandled intent: ${String(exhaustive)}`);
@@ -143,67 +172,95 @@ export class ConversationManager {
     }
   }
 
-  private progressBooking(state: SessionState, fromUnknown = false): AgentReply {
-    if (!state.service) {
+  private progressBooking(
+    business: Business,
+    state: SessionState,
+    source: BookingSource,
+    fromUnknown = false,
+  ): AgentReply {
+    const L = business.locale;
+    const service = this.service(business, state.serviceId);
+
+    if (!service) {
+      const lead =
+        L === "pt"
+          ? fromUnknown
+            ? "Posso ajudar a marcar. Que serviço pretende?"
+            : "Claro! Que serviço pretende?"
+          : fromUnknown
+            ? "I can help you book. Which service would you like?"
+            : "Sure! Which service would you like?";
+      return { reply: `${lead} ${L === "pt" ? "Temos" : "We offer"}: ${servicesSentence(business)}.` };
+    }
+
+    if (!state.start) {
       return {
-        reply: fromUnknown
-          ? "I can help you book an appointment. Which service would you like? " +
-            `We offer: ${servicesSentence()}.`
-          : `Sure! Which service would you like? We offer: ${servicesSentence()}.`,
+        reply:
+          L === "pt"
+            ? `Perfeito — ${service.name}. Para que dia e hora?`
+            : `Great — ${service.name}. What day and time works for you?`,
       };
     }
 
-    const serviceName = getService(state.service).name;
-
-    if (!state.start) {
-      return { reply: `Great — a ${serviceName}. What day and time works for you?` };
-    }
-
-    const availability = checkAvailability(this.store, state.service, state.start, this.now());
+    const bookings = this.store.listBookings(business.id);
+    const availability = checkAvailability(business, service, state.start, bookings, this.now());
     if (!availability.ok) {
-      return this.explainUnavailable(state, availability.reason);
+      return this.explainUnavailable(business, state, service, availability.reason);
     }
 
-    if (!state.customerName && !state.askedName) {
+    if (!state.customerName && !state.askedName && source !== "voice") {
       state.askedName = true;
-      return { reply: "And what name should I put the appointment under?" };
+      return { reply: L === "pt" ? "Em que nome fica a marcação?" : "What name should I put it under?" };
     }
 
     state.awaitingConfirmation = true;
-    const namePart = state.customerName ? ` for ${state.customerName}` : "";
+    const namePart = state.customerName ? (L === "pt" ? ` para ${state.customerName}` : ` for ${state.customerName}`) : "";
     return {
       reply:
-        `Please confirm: ${serviceName} on ${formatDateTime(state.start)}${namePart}. ` +
-        "Shall I book it? (yes/no)",
+        L === "pt"
+          ? `Confirmar: ${service.name} — ${formatDateTime(state.start, business)}${namePart}. Confirmo? (sim/não)`
+          : `Please confirm: ${service.name} — ${formatDateTime(state.start, business)}${namePart}. Shall I book it? (yes/no)`,
     };
   }
 
   private explainUnavailable(
+    business: Business,
     state: SessionState,
-    reason: "past" | "closed_day" | "outside_hours" | "conflict",
+    service: Service,
+    reason: Unavailable,
   ): AgentReply {
-    const service = state.service!;
-    const start = state.start!;
-    const suggestions = suggestSlots(this.store, service, start, this.now());
-    const suggestionText =
-      suggestions.length > 0
-        ? ` The next open times that day are: ${suggestions.map(formatTime).join(", ")}.`
-        : "";
-
+    const L = business.locale;
+    const bookings = this.store.listBookings(business.id);
+    const suggestions = suggestSlots(business, service, state.start!, bookings, this.now());
+    const times = suggestions.map((s) => formatTime(s, business)).join(", ");
+    const suggestionText = suggestions.length
+      ? L === "pt"
+        ? ` Horas livres nesse dia: ${times}.`
+        : ` Open times that day: ${times}.`
+      : "";
     state.start = null;
     switch (reason) {
       case "past":
-        return { reply: `That time is in the past. Could you pick a future time?${suggestionText}` };
+        return {
+          reply: L === "pt" ? `Essa hora já passou. Escolha uma hora futura.${suggestionText}` : `That time is in the past.${suggestionText}`,
+        };
       case "closed_day":
-        return { reply: "We're closed on Sundays. Which other day works for you?" };
+        return {
+          reply: L === "pt" ? "Estamos fechados nesse dia. Que outro dia prefere?" : "We're closed that day. Which other day?",
+        };
       case "outside_hours":
         return {
           reply:
-            `We're open 9:00 AM to 5:00 PM.${suggestionText || " Please pick a time within business hours."}`,
+            L === "pt"
+              ? `Esse horário está fora do nosso funcionamento.${suggestionText || " Escolha uma hora dentro do horário."}`
+              : `That's outside business hours.${suggestionText || " Please pick a time within hours."}`,
         };
       case "conflict":
         return {
-          reply: `Sorry, that slot is already booked.${suggestionText || " Please try another time."}`,
+          reply:
+            L === "pt"
+              ? `Essa hora já está ocupada.${suggestionText || " Tente outra hora."}`
+              : `That slot is already booked.${suggestionText || " Try another time."}`,
         };
       default: {
         const exhaustive: never = reason;
@@ -212,74 +269,110 @@ export class ConversationManager {
     }
   }
 
-  private handleAffirm(state: SessionState): AgentReply {
-    if (!state.awaitingConfirmation || !state.service || !state.start) {
-      return { reply: "I don't have a pending booking to confirm. What would you like to schedule?" };
-    }
-    const availability = checkAvailability(this.store, state.service, state.start, this.now());
-    if (!availability.ok) {
-      state.awaitingConfirmation = false;
-      return this.explainUnavailable(state, availability.reason);
-    }
-    const booking = this.store.create({
-      service: state.service,
-      customerName: state.customerName,
-      start: state.start,
-    });
-    const namePart = booking.customerName ? ` for ${booking.customerName}` : "";
-    const reply =
-      `Booked! Your ${booking.serviceName} is confirmed for ` +
-      `${formatDateTime(new Date(booking.start))}${namePart}. See you then!`;
-    this.reset(this.sessionIdFor(state));
-    return { reply, booking };
-  }
-
-  private handleDeny(state: SessionState): AgentReply {
-    if (state.awaitingConfirmation) {
-      state.awaitingConfirmation = false;
-      state.start = null;
-      return { reply: "No problem, I won't book that. Would you like a different time?" };
-    }
-    return { reply: "Okay. Let me know if there's anything else I can book for you." };
-  }
-
-  private handleAvailability(
+  private async handleAffirm(
+    business: Business,
     state: SessionState,
-    service: ServiceId | null,
-    dateTime: string | null,
-  ): AgentReply {
-    const targetService = service ?? state.service;
-    if (targetService) {
-      state.service = targetService;
+    source: BookingSource,
+  ): Promise<AgentReply> {
+    const L = business.locale;
+    const service = this.service(business, state.serviceId);
+    if (!state.awaitingConfirmation || !service || !state.start) {
+      return {
+        reply: L === "pt" ? "Não tenho nenhuma marcação por confirmar. O que pretende marcar?" : "I have no pending booking. What would you like to book?",
+      };
     }
-    if (!targetService) {
-      return { reply: `Which service are you interested in? We offer: ${servicesSentence()}.` };
+    const result = await this.scheduler.book({
+      business,
+      service,
+      start: state.start,
+      resourceId: firstAvailableResource(business),
+      customerName: state.customerName,
+      customerPhone: state.customerPhone,
+      source,
+    });
+    if (!result.ok) {
+      state.awaitingConfirmation = false;
+      if (result.reason === "error") {
+        return { reply: L === "pt" ? "Ocorreu um erro a marcar. Tente novamente." : "Something went wrong. Please try again." };
+      }
+      return this.explainUnavailable(business, state, service, result.reason);
     }
-    const around = dateTime ? new Date(dateTime) : this.now();
-    const suggestions = suggestSlots(this.store, targetService, around, this.now());
-    const serviceName = getService(targetService).name;
-    if (suggestions.length === 0) {
-      return { reply: `I couldn't find open ${serviceName} slots that day. Try another date?` };
-    }
+    const booking = result.booking;
+    const namePart = booking.customerName ? (L === "pt" ? ` para ${booking.customerName}` : ` for ${booking.customerName}`) : "";
+    this.reset(this.sessionIdFor(state));
     return {
       reply:
-        `For ${serviceName} on ${suggestions[0].toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}, ` +
-        `these times are open: ${suggestions.map(formatTime).join(", ")}. Which works for you?`,
+        L === "pt"
+          ? `Marcado! ${booking.serviceName} — ${formatDateTime(new Date(booking.start), business)}${namePart}. Até já!`
+          : `Booked! ${booking.serviceName} — ${formatDateTime(new Date(booking.start), business)}${namePart}. See you then!`,
+      booking,
     };
   }
 
-  private handleCancel(service: ServiceId | null): AgentReply {
-    const bookings = this.store.list();
-    if (bookings.length === 0) {
-      return { reply: "There are no appointments to cancel." };
+  private handleDeny(business: Business, state: SessionState): AgentReply {
+    const L = business.locale;
+    if (state.awaitingConfirmation) {
+      state.awaitingConfirmation = false;
+      state.start = null;
+      return { reply: L === "pt" ? "Sem problema. Prefere outra hora?" : "No problem. Would you like another time?" };
     }
-    const target = service ? bookings.find((b) => b.service === service) : bookings[bookings.length - 1];
-    if (!target) {
-      return { reply: "I couldn't find a matching appointment to cancel." };
+    return { reply: L === "pt" ? "Certo. Diga se precisar de mais alguma coisa." : "Okay. Let me know if there's anything else." };
+  }
+
+  private handleAvailability(
+    business: Business,
+    state: SessionState,
+    serviceId: string | null,
+    dateTime: string | null,
+  ): AgentReply {
+    const L = business.locale;
+    const targetId = serviceId ?? state.serviceId;
+    if (targetId) {
+      state.serviceId = targetId;
     }
-    this.store.cancel(target.id);
+    const service = this.service(business, targetId);
+    if (!service) {
+      return {
+        reply: L === "pt" ? `Que serviço pretende? Temos: ${servicesSentence(business)}.` : `Which service? We offer: ${servicesSentence(business)}.`,
+      };
+    }
+    const around = dateTime ? new Date(dateTime) : this.now();
+    const bookings = this.store.listBookings(business.id);
+    const suggestions = suggestSlots(business, service, around, bookings, this.now());
+    if (suggestions.length === 0) {
+      return { reply: L === "pt" ? `Não encontrei horas livres nesse dia para ${service.name}. Outro dia?` : `No open slots that day for ${service.name}. Another day?` };
+    }
+    const dayLabel = new Intl.DateTimeFormat(bcp47(L), {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      timeZone: business.timezone,
+    }).format(suggestions[0]);
+    const times = suggestions.map((s) => formatTime(s, business)).join(", ");
     return {
-      reply: `Cancelled your ${target.serviceName} on ${formatDateTime(new Date(target.start))}.`,
+      reply:
+        L === "pt"
+          ? `Para ${service.name} em ${dayLabel}, há: ${times}. Qual prefere?`
+          : `For ${service.name} on ${dayLabel}: ${times}. Which works?`,
+    };
+  }
+
+  private async handleCancel(business: Business, serviceId: string | null): Promise<AgentReply> {
+    const L = business.locale;
+    const bookings = this.store.listBookings(business.id);
+    if (bookings.length === 0) {
+      return { reply: L === "pt" ? "Não há marcações para cancelar." : "There are no appointments to cancel." };
+    }
+    const target = serviceId ? bookings.find((b) => b.serviceId === serviceId) : bookings[bookings.length - 1];
+    if (!target) {
+      return { reply: L === "pt" ? "Não encontrei essa marcação." : "I couldn't find that appointment." };
+    }
+    await this.scheduler.cancel(business, target);
+    return {
+      reply:
+        L === "pt"
+          ? `Cancelei: ${target.serviceName} — ${formatDateTime(new Date(target.start), business)}.`
+          : `Cancelled: ${target.serviceName} — ${formatDateTime(new Date(target.start), business)}.`,
     };
   }
 
@@ -291,4 +384,17 @@ export class ConversationManager {
     }
     return "default";
   }
+}
+
+function firstAvailableResource(business: Business): string | null {
+  const available = business.resources.find((r) => r.available);
+  return (available ?? business.resources[0])?.id ?? null;
+}
+
+export function greeting(business: Business): string {
+  const L = business.locale;
+  if (L === "pt") {
+    return `Olá! Sou ${business.agentName || "o assistente"} da ${business.name}. Posso marcar a sua ${business.useCase === "barbearia" ? "ida à barbearia" : "marcação"}. Temos: ${servicesSentence(business)}. O que pretende?`;
+  }
+  return `Hi! I'm ${business.agentName || "the assistant"} at ${business.name}. I can book your appointment. We offer: ${servicesSentence(business)}. What would you like?`;
 }

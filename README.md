@@ -1,90 +1,119 @@
-# voice-booking-agent
+# Atende — Voice Agents for Portuguese SMEs
 
-A conversational **voice/chat booking assistant**. Talk (or type) to the agent to
-schedule appointments — it understands natural language like _"Book a haircut
-tomorrow at 3pm"_, checks availability against business hours and existing
-appointments, fills in missing details through follow-up questions, and confirms
-the booking end to end.
+**Atende** is a subscription SaaS: a **voice booking agent** with its own **+351**
+number that answers calls, books appointments into the business calendar, and
+warm-transfers to the right person when needed. Beachhead: **barbearias / salões**
+(then clinics), PT-first.
 
-The project is fully self-contained: no external API keys or paid services are
-required to run it. Natural-language understanding is rule-based plus
-[`chrono-node`](https://github.com/wanasit/chrono) for date/time parsing, and
-bookings are stored in memory (optionally persisted to a JSON file).
+> This repository implements the **Voice Agents** product from the Transformative
+> productization strategy. "Atende" is a working brand placeholder.
 
-## Features
+## What it does
 
-- Natural-language intent + entity parsing (service, date/time, customer name).
-- Slot-filling dialogue: the agent asks for whatever detail is missing.
-- Availability engine: business hours (Mon–Sat, 9am–5pm), per-service durations,
-  conflict detection, and open-slot suggestions.
-- REST API + a modern web UI with **voice input** (Web Speech API) and spoken
-  replies (speech synthesis) where the browser supports them.
+- **PT-first landing page** with barber/clinic positioning and pricing.
+- **Thin backoffice** (not a full PMS): onboarding, resources (barbers),
+  services/durations/prices, opening hours, Cal.com connect, number provisioning,
+  billing, and the **Disponível / A cortar** warm-transfer toggle.
+- **Conversational agent** (PT/EN) that understands natural language
+  (_"marcar corte + barba quinta às 16h"_), fills missing details, checks
+  availability and books — available as a **web/voice demo** and via a
+  **voice-orchestrator function webhook** (Grok Live 2 / Retell / Vapi).
+- **Cal.com** as the scheduling brain, with **Google Calendar** sync configured
+  inside Cal.com (the barber's backoffice is the Google Calendar app on their phone).
+- **Telnyx (primary) / Zadarma (fallback)** number provisioning, plus inbound-call
+  **TeXML** and warm transfer.
+- **Stripe subscriptions** where the plan price **includes the monthly DID cost**
+  (+ included minutes; optional metered overage).
 
-## Tech stack
+Every integration is **optional**: with no keys the app runs a self-contained
+demo (in-memory scheduler, mock number provider) so it is always deployable.
 
-- Node.js + TypeScript (ESM)
-- Express (HTTP API + static frontend)
-- chrono-node (natural-language dates)
-- Vitest (tests), ESLint + `tsc` (lint/typecheck)
+## Architecture
 
-## Getting started
-
-```bash
-npm ci          # install dependencies
-npm run dev     # start the dev server on http://localhost:3000
+```
+Caller ──▶ DID (+351, Telnyx/Zadarma) ──SIP──▶ voice stack (Grok/Retell/Vapi)
+                                                     │  function webhook
+                                                     ▼
+                          /voice/functions/:slug  →  Scheduler (Cal.com ⇄ Google)
+                                                     ▲
+Web/voice demo ──▶ /api/business/:slug/message ──── ConversationManager
 ```
 
-Then open http://localhost:3000 and start booking.
+| Layer | Path |
+| --- | --- |
+| Config + feature flags | `src/config.ts` |
+| Domain (business, service, resource, plan) | `src/domain/` |
+| Store (JSON persistence; mount a volume) | `src/store/` |
+| Scheduling (Cal.com + in-memory) | `src/scheduling/` |
+| Conversational agent (PT/EN) | `src/agent/` |
+| Billing (Stripe) | `src/billing/` |
+| Telephony (Telnyx/Zadarma/mock, voice webhooks) | `src/telephony/` |
+| HTTP server + routes | `src/server.ts` |
+| Landing / backoffice / demo UIs | `public/` |
+
+## Run locally
+
+```bash
+npm ci
+npm run dev            # http://localhost:3000
+```
+
+- Landing: `/`
+- Backoffice: `/app/:slug` (a demo `barbearia-lisboa` is seeded)
+- Voice demo: `/demo/:slug`
+
+Copy `.env.example` and fill only the integrations you want to activate.
 
 ## Scripts
 
-| Script              | Description                                    |
-| ------------------- | ---------------------------------------------- |
-| `npm run dev`       | Start the dev server with hot reload (`tsx`).  |
-| `npm run build`     | Compile TypeScript to `dist/`.                 |
-| `npm start`         | Run the compiled server from `dist/`.          |
-| `npm run typecheck` | Type-check without emitting.                   |
-| `npm run lint`      | Lint with ESLint.                              |
-| `npm test`          | Run the Vitest suite.                          |
+| Script | Description |
+| --- | --- |
+| `npm run dev` | Dev server with hot reload (`tsx`) |
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm start` | Run compiled server |
+| `npm run typecheck` / `npm run lint` | `tsc --noEmit` / ESLint |
+| `npm test` | Vitest suite |
 
-## API
+## Key HTTP endpoints
 
-| Method | Endpoint        | Body                       | Description                          |
-| ------ | --------------- | -------------------------- | ------------------------------------ |
-| GET    | `/api/health`   | –                          | Health check.                        |
-| GET    | `/api/services` | –                          | List bookable services.              |
-| GET    | `/api/bookings` | –                          | List current bookings.               |
-| POST   | `/api/message`  | `{ sessionId, text }`      | Send a message to the agent.         |
-| POST   | `/api/reset`    | `{ sessionId }`            | Reset a conversation session.        |
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/health` | Health + active feature flags |
+| GET | `/api/plans` | Plan catalog + setup fee |
+| POST | `/api/onboard` | Create a business |
+| GET/PUT | `/api/business/:slug` | Read / update config |
+| POST | `/api/business/:slug/number` | Provision a +351 number |
+| POST | `/api/business/:slug/resource/:rid/toggle` | Disponível / A cortar |
+| POST | `/api/business/:slug/message` | Talk to the agent |
+| POST | `/api/business/:slug/checkout` \| `/portal` | Stripe checkout / portal |
+| POST | `/voice/incoming/:slug` | Inbound-call TeXML |
+| POST | `/voice/functions/:slug` | Voice-LLM function calls (`get_slots`, `book_appointment`, …) |
+| POST | `/webhooks/stripe` | Stripe subscription webhooks |
 
-### Example
+## Deploy on Railway
+
+The repo is Railway-ready (`Dockerfile` + `railway.json`, healthcheck at
+`/api/health`, `PORT` respected).
 
 ```bash
-curl -s localhost:3000/api/message \
-  -H 'Content-Type: application/json' \
-  -d '{"sessionId":"demo","text":"Book a haircut tomorrow at 3pm for Alice"}'
+# One-time
+railway login                 # or set RAILWAY_TOKEN in the environment
+railway init                  # create/link a project
+railway up                    # build & deploy the Dockerfile
+
+# Recommended: attach a volume mounted at /data for booking persistence,
+# and set PUBLIC_BASE_URL to the deployed URL.
+railway variables set PUBLIC_BASE_URL=https://<your-app>.up.railway.app
 ```
 
-## Configuration
+Set integration variables (see `.env.example`) in the Railway service to light
+up Cal.com, Stripe, and Telnyx/Zadarma. Without them the service still boots and
+serves the demo.
 
-| Env var         | Default              | Description                                  |
-| --------------- | -------------------- | -------------------------------------------- |
-| `PORT`          | `3000`               | HTTP port.                                   |
-| `BOOKINGS_FILE` | `./data/bookings.json` | JSON file used to persist bookings on disk. |
+## Status / next steps
 
-## Project layout
-
-```
-src/
-  server.ts            Express server (API + static frontend)
-  types.ts             Shared types
-  agent/
-    nlu.ts             Intent + entity parsing
-    conversation.ts    Slot-filling dialogue manager
-  booking/
-    catalog.ts         Services, business hours
-    store.ts           Booking store (memory + JSON persistence)
-    availability.ts    Availability + slot suggestions
-public/                Web UI (HTML/CSS/JS, voice via Web Speech API)
-tests/                 Vitest unit tests
-```
+- Live implementation is wired for Cal.com, Stripe and Telnyx and gated behind
+  credentials; Zadarma number purchase is typically completed in its panel.
+- Production voice (PSTN) needs a provisioned DID + SIP pointed at the voice
+  stack; the function webhook is ready for the orchestrator to call.
+- Auth/multi-tenant login for the backoffice is intentionally minimal in v1.

@@ -1,63 +1,132 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Voice Booking Agent</title>
+    <title>Atende · Assistente de voz que marca por si</title>
+    <meta
+      name="description"
+      content="Assistente de voz com número +351 próprio que atende, marca e sincroniza com o Google Calendar. Feito para barbearias, salões e clínicas em Portugal."
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="app">
-      <aside class="sidebar">
-        <div class="brand">
-          <div class="logo">VB</div>
-          <div>
-            <h1>Voice Booking</h1>
-            <p>Your appointment assistant</p>
-          </div>
+    <header>
+      <div class="nav">
+        <div class="brand"><span class="dot">A</span> Atende</div>
+        <nav class="nav-links">
+          <a href="#como-funciona">Como funciona</a>
+          <a href="#casos">Casos de uso</a>
+          <a href="#precos">Preços</a>
+          <a class="btn btn-ghost btn-sm" href="/demo/barbearia-lisboa">Ver demo</a>
+          <a class="btn btn-primary btn-sm" href="#" id="openOnboard">Começar</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="hero">
+        <span class="eyebrow">Feito para PME portuguesas · barbearias, salões e clínicas</span>
+        <h1>O assistente de voz que <span class="g">marca por si</span>.</h1>
+        <p class="sub">
+          Um número <strong>+351</strong> próprio que atende as chamadas, marca as horas na sua agenda
+          e transfere para o barbeiro quando é preciso. Sem apps do operador, sem reencaminhamentos manuais.
+        </p>
+        <div class="cta">
+          <a href="#" class="btn btn-primary" id="openOnboard2">Criar o meu assistente</a>
+          <a href="/demo/barbearia-lisboa" class="btn btn-ghost">Experimentar a demo →</a>
         </div>
+        <p class="note">Subscrição mensal com minutos incluídos. Número já incluído no preço.</p>
+      </section>
 
-        <section class="panel">
-          <h2>Upcoming appointments</h2>
-          <ul id="bookings" class="bookings">
-            <li class="empty">No appointments yet.</li>
-          </ul>
-        </section>
+      <section id="como-funciona">
+        <h2 class="section-title">Como funciona</h2>
+        <p class="section-sub">Fica a funcionar no mesmo dia. A agenda é a app Google Calendar do telemóvel.</p>
+        <div class="steps">
+          <div class="step"><div class="n">1</div><div><h4>Configura o assistente</h4><p>Nome do negócio, nome e voz do assistente, idioma e o que faz. Fica pronto em minutos.</p></div></div>
+          <div class="step"><div class="n">2</div><div><h4>Recebe um número +351</h4><p>Publicamos o novo número no Google, Instagram e à porta. Opcional: portamos o número atual.</p></div></div>
+          <div class="step"><div class="n">3</div><div><h4>Sincroniza a agenda (Cal.com + Google)</h4><p>O assistente lê as horas livres e marca diretamente. Tudo aparece no Google Calendar.</p></div></div>
+          <div class="step"><div class="n">4</div><div><h4>Atende e transfere</h4><p>Com um toque em "Disponível / A cortar", as chamadas passam para o seu telemóvel quando quiser.</p></div></div>
+        </div>
+      </section>
 
-        <section class="panel hints">
-          <h2>Try saying</h2>
-          <ul>
-            <li>"Book a haircut tomorrow at 3pm"</li>
-            <li>"What services do you offer?"</li>
-            <li>"Is Friday morning free for a massage?"</li>
-            <li>"Show my appointments"</li>
-          </ul>
-        </section>
-      </aside>
+      <section id="casos">
+        <h2 class="section-title">Casos de uso</h2>
+        <p class="section-sub">Começámos pelas barbearias e salões — a maior densidade em Portugal.</p>
+        <div class="grid grid-3">
+          <div class="card"><div class="ico">💈</div><h3>Barbearias & salões</h3><p>Marcação de cortes, barba e coloração. Transferência para o barbeiro certo.</p></div>
+          <div class="card"><div class="ico">🦷</div><h3>Clínicas / dentária</h3><p>Atendimento fora de horas e triagem de marcações. (Não presta aconselhamento médico.)</p></div>
+          <div class="card"><div class="ico">🔧</div><h3>Serviços & ofícios</h3><p>Nunca perca uma chamada quando está com as mãos ocupadas. Overflow atendido.</p></div>
+        </div>
+      </section>
 
-      <main class="chat">
-        <header class="chat-header">
-          <span class="status-dot" id="statusDot"></span>
-          <span id="statusText">Connecting…</span>
-        </header>
+      <section id="precos">
+        <h2 class="section-title">Preços simples</h2>
+        <p class="section-sub">Subscrição com minutos incluídos e número já no preço. Sem "créditos" vagos.</p>
+        <div class="plans" id="plans"></div>
+        <p class="setup-note" id="setupNote"></p>
+      </section>
+    </main>
 
-        <div id="messages" class="messages" aria-live="polite"></div>
+    <footer>
+      <div class="container">
+        Atende — assistente de voz para PME · Portugal · <span id="year"></span> ·
+        Marca de trabalho (placeholder) do produto Voice Agents da Transformative.
+      </div>
+    </footer>
 
-        <form id="composer" class="composer">
-          <button type="button" id="micButton" class="mic" title="Speak" aria-label="Speak">
-            &#127908;
-          </button>
-          <input
-            id="input"
-            type="text"
-            autocomplete="off"
-            placeholder="Type or press the mic to speak…"
-          />
-          <button type="submit" class="send">Send</button>
+    <div class="modal-backdrop" id="onboardModal">
+      <div class="modal">
+        <span class="close-x" id="closeOnboard">×</span>
+        <h3>Criar o meu assistente</h3>
+        <p class="hint">Configuração inicial. Pode ajustar tudo depois no backoffice.</p>
+        <form id="onboardForm">
+          <label for="name">Nome do negócio</label>
+          <input id="name" name="name" placeholder="Barbearia do Zé" required />
+          <div class="row">
+            <div>
+              <label for="useCase">Tipo</label>
+              <select id="useCase" name="useCase">
+                <option value="barbearia">Barbearia</option>
+                <option value="salao">Salão</option>
+                <option value="clinica">Clínica</option>
+                <option value="restaurante">Restaurante</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+            <div>
+              <label for="plan">Plano</label>
+              <select id="plan" name="planId">
+                <option value="base">Base</option>
+                <option value="pro" selected>Pro</option>
+                <option value="studio">Studio</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="agentName">Nome do assistente</label>
+              <input id="agentName" name="agentName" value="Sofia" />
+            </div>
+            <div>
+              <label for="agentGender">Voz</label>
+              <select id="agentGender" name="agentGender">
+                <option value="feminino">Feminina</option>
+                <option value="masculino">Masculina</option>
+                <option value="neutro">Neutra</option>
+              </select>
+            </div>
+          </div>
+          <label for="locale">Idioma</label>
+          <select id="locale" name="locale">
+            <option value="pt" selected>Português</option>
+            <option value="en">Inglês</option>
+          </select>
+          <button type="submit" class="btn btn-primary">Criar assistente →</button>
         </form>
-      </main>
+      </div>
     </div>
 
-    <script src="/app.js"></script>
+    <script src="/landing.js"></script>
   </body>
 </html>

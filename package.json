@@ -1,8 +1,8 @@
 {
-  "name": "voice-booking-agent",
+  "name": "atende-voice-agents",
   "version": "0.1.0",
   "private": true,
-  "description": "Conversational voice/chat agent that books appointments end to end.",
+  "description": "Atende — voice booking agent SaaS for Portuguese SMEs (barbearias, salões, clínicas). PT-first landing, thin backoffice, Cal.com scheduling, Telnyx/Zadarma numbers, Stripe subscriptions.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "chrono-node": "^2.7.7",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "stripe": "^17.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",

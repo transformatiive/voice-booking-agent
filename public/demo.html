@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atende · Demo do assistente</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="demo-wrap">
+      <aside class="demo-side">
+        <div class="brand" style="margin-bottom:18px"><span class="dot">A</span> Atende</div>
+        <a class="btn btn-ghost btn-sm" href="/" style="margin-bottom:18px">← Início</a>
+        <div class="panel-card">
+          <h2 id="bizName">…</h2>
+          <p class="muted" id="bizMeta" style="font-size:13px"></p>
+          <a class="btn btn-ghost btn-sm" id="adminLink" href="#" style="margin-top:10px">Abrir backoffice</a>
+        </div>
+        <div class="panel-card">
+          <h2>Marcações</h2>
+          <ul id="bookings" class="bookings-list"><li class="muted">Sem marcações.</li></ul>
+        </div>
+        <div class="panel-card">
+          <h2>Experimente dizer</h2>
+          <ul class="bookings-list" id="hints"></ul>
+        </div>
+      </aside>
+
+      <main class="chat">
+        <div class="chat-head">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">A ligar…</span>
+        </div>
+        <div id="messages" class="messages" aria-live="polite"></div>
+        <form id="composer" class="composer">
+          <button type="button" id="mic" class="btn btn-ghost mic" title="Falar">🎙️</button>
+          <input id="input" type="text" autocomplete="off" placeholder="Escreva ou toque no microfone…" />
+          <button type="submit" class="btn btn-primary">Enviar</button>
+        </form>
+      </main>
+    </div>
+    <script src="/demo.js"></script>
+  </body>
+</html>

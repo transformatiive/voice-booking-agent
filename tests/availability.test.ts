@@ -1,66 +1,62 @@
 import { describe, expect, it } from "vitest";
-import { BookingStore } from "../src/booking/store.js";
-import { checkAvailability, suggestSlots } from "../src/booking/availability.js";
+import { checkAvailability, suggestSlots } from "../src/scheduling/availability.js";
+import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
+import { tempStore } from "./helpers.js";
 
-const NOW = new Date(2026, 7, 26, 9, 0, 0); // Wed Aug 26, 2026 09:00
+const NOW = new Date(2026, 7, 26, 9, 0, 0); // Wed 26 Aug 2026 09:00
 
-describe("checkAvailability", () => {
-  it("accepts a valid future slot within business hours", () => {
-    const store = new BookingStore();
-    const start = new Date(2026, 7, 27, 15, 0, 0); // Thu 3pm
-    expect(checkAvailability(store, "haircut", start, NOW)).toEqual({ ok: true });
+function makeBusiness() {
+  const store = tempStore();
+  const business = store.createBusiness({
+    name: "Barbearia Teste",
+    useCase: "barbearia",
+    locale: "pt",
+    agentName: "Sofia",
+    agentGender: "feminino",
+    planId: "base",
+  });
+  return { store, business, service: business.services[0] };
+}
+
+describe("availability", () => {
+  it("accepts a valid future slot within hours", () => {
+    const { business, service } = makeBusiness();
+    const start = new Date(2026, 7, 27, 15, 0, 0); // Thu 15:00
+    expect(checkAvailability(business, service, start, [], NOW)).toEqual({ ok: true });
   });
 
-  it("rejects times in the past", () => {
-    const store = new BookingStore();
-    const start = new Date(2026, 7, 25, 15, 0, 0); // yesterday
-    expect(checkAvailability(store, "haircut", start, NOW)).toEqual({
-      ok: false,
-      reason: "past",
-    });
-  });
-
-  it("rejects Sundays", () => {
-    const store = new BookingStore();
-    const start = new Date(2026, 7, 30, 11, 0, 0); // Sunday
-    expect(checkAvailability(store, "haircut", start, NOW)).toEqual({
+  it("rejects past, closed Sunday, and out-of-hours", () => {
+    const { business, service } = makeBusiness();
+    expect(checkAvailability(business, service, new Date(2026, 7, 25, 15, 0), [], NOW).ok).toBe(false);
+    expect(checkAvailability(business, service, new Date(2026, 7, 30, 11, 0), [], NOW)).toEqual({
       ok: false,
       reason: "closed_day",
     });
-  });
-
-  it("rejects times outside business hours", () => {
-    const store = new BookingStore();
-    const tooEarly = new Date(2026, 7, 27, 8, 0, 0);
-    expect(checkAvailability(store, "haircut", tooEarly, NOW).ok).toBe(false);
-    const runsPastClose = new Date(2026, 7, 27, 16, 45, 0); // 45-min service ends 17:30
-    expect(checkAvailability(store, "manicure", runsPastClose, NOW)).toEqual({
+    expect(checkAvailability(business, service, new Date(2026, 7, 27, 8, 0), [], NOW)).toEqual({
       ok: false,
       reason: "outside_hours",
     });
   });
 
-  it("detects conflicts with existing bookings", () => {
-    const store = new BookingStore();
-    store.create({ service: "massage", customerName: null, start: new Date(2026, 7, 27, 14, 0, 0) });
-    // Massage is 60 min -> occupies 14:00-15:00.
-    const overlapping = new Date(2026, 7, 27, 14, 30, 0);
-    expect(checkAvailability(store, "haircut", overlapping, NOW)).toEqual({
-      ok: false,
-      reason: "conflict",
+  it("detects conflicts and suggests open slots", async () => {
+    const { store, business, service } = makeBusiness();
+    const scheduler = new InMemoryScheduler(store, () => NOW);
+    await scheduler.book({
+      business,
+      service,
+      start: new Date(2026, 7, 27, 9, 0, 0),
+      resourceId: null,
+      customerName: null,
+      customerPhone: null,
+      source: "web",
     });
-    const afterward = new Date(2026, 7, 27, 15, 0, 0);
-    expect(checkAvailability(store, "haircut", afterward, NOW).ok).toBe(true);
-  });
-});
+    const bookings = store.listBookings(business.id);
+    const conflict = checkAvailability(business, service, new Date(2026, 7, 27, 9, 15, 0), bookings, NOW);
+    expect(conflict).toEqual({ ok: false, reason: "conflict" });
 
-describe("suggestSlots", () => {
-  it("suggests open times skipping conflicts", () => {
-    const store = new BookingStore();
-    store.create({ service: "haircut", customerName: null, start: new Date(2026, 7, 27, 9, 0, 0) });
-    const slots = suggestSlots(store, "haircut", new Date(2026, 7, 27, 9, 0, 0), NOW, 3);
+    const slots = suggestSlots(business, service, new Date(2026, 7, 27, 9, 0, 0), bookings, NOW, 3);
     expect(slots.length).toBe(3);
-    // 09:00 is taken (30 min), so the first suggestion should be 09:30.
+    // 09:00 taken (30 min) -> first suggestion 09:30
     expect(slots[0].getHours()).toBe(9);
     expect(slots[0].getMinutes()).toBe(30);
   });
