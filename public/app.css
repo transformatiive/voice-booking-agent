@@ -148,16 +148,30 @@
 .cc-avatar.speaking { box-shadow: 0 0 0 6px rgba(165,55,42,.16); }
 
 .callcard[data-phase="idle"] .cc-live .rec,
-.callcard[data-phase="ended"] .cc-live .rec { display: none; }
+.callcard[data-phase="ended"] .cc-live .rec,
+.callcard[data-phase="blocked"] .cc-live .rec { display: none; }
 .callcard[data-phase="idle"] .cc-live,
-.callcard[data-phase="ended"] .cc-live { color: var(--muted); letter-spacing: .06em; }
+.callcard[data-phase="ended"] .cc-live,
+.callcard[data-phase="blocked"] .cc-live { color: var(--muted); letter-spacing: .06em; }
 
 .callcard[data-phase="idle"] .cc-mute,
 .callcard[data-phase="idle"] .cc-talk,
 .callcard[data-phase="idle"] .cc-keypad,
 .callcard[data-phase="ended"] .cc-mute,
 .callcard[data-phase="ended"] .cc-talk,
-.callcard[data-phase="ended"] .cc-keypad { display: none; }
+.callcard[data-phase="ended"] .cc-keypad,
+.callcard[data-phase="blocked"] .cc-mute,
+.callcard[data-phase="blocked"] .cc-talk,
+.callcard[data-phase="blocked"] .cc-keypad { display: none; }
+
+.cc-config-err {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: rgba(165,55,42,.1);
+  color: var(--err);
+  font-size: 13px;
+}
 
 .cc-controls .talk {
   width: 64px; height: 64px; background: var(--accent); color: #fff; border-color: var(--accent);
