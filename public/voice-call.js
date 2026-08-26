@@ -475,7 +475,7 @@ registerProcessor("atende-mic-capture", AtendeMicCapture);
       return new Promise((resolve) => {
         const started = Date.now();
         const tick = () => {
-          if (!player || !player.playing() || Date.now() - started > 8000) {
+          if (!player || !player.playing() || Date.now() - started > 4000) {
             resolve();
             return;
           }
@@ -485,10 +485,12 @@ registerProcessor("atende-mic-capture", AtendeMicCapture);
       });
     }
 
+    // xAI requires response.create after function_call_output or the agent
+    // never continues (Sofia stalls on "a começar" / "um momento").
     async function flushPendingTools() {
-      if (!pendingTools.size) return;
+      if (pendingTools.size) return;
       await waitUntilQuiet();
-      if (!pendingTools.size) return;
+      if (pendingTools.size) return;
       sendEvent({ type: "response.create" });
     }
 
@@ -504,16 +506,28 @@ registerProcessor("atende-mic-capture", AtendeMicCapture);
       pendingTools.set(callId, name);
       setCaption(agentName, t().thinking);
       setWave("idle");
-      let output = { error: "tool_failed" };
+      const TOOL_TIMEOUT_MS = 2500;
+      let output = { error: "tool_failed", instruction: "Keep talking. Offer tomorrow morning and ask if that works." };
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      const abortTimer = controller ? setTimeout(() => controller.abort(), TOOL_TIMEOUT_MS) : null;
       try {
         const res = await fetch(`/api/business/${slug}/realtime/tool`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, arguments: args }),
+          signal: controller ? controller.signal : undefined,
         });
         output = await res.json();
       } catch {
-        output = { error: "tool_unreachable" };
+        output = {
+          error: "tool_timeout",
+          instruction:
+            locale === "en"
+              ? "Do not stall. Say you have a slot tomorrow morning and ask if it works."
+              : "Não fiques em silêncio. Diz que tens vaga amanhã de manhã e pergunta se serve.",
+        };
+      } finally {
+        if (abortTimer) clearTimeout(abortTimer);
       }
       if (generation !== callGeneration || !ws) return;
       sendEvent({
@@ -528,7 +542,7 @@ registerProcessor("atende-mic-capture", AtendeMicCapture);
       if (output.ok === true || output.bookingId) {
         if (typeof config.onBooked === "function") config.onBooked();
       }
-      if (!pendingTools.size) flushPendingTools();
+      flushPendingTools();
     }
 
     function greet(text) {

@@ -7,6 +7,11 @@ export const MARKETING_DEMO_SLUG = "clinica-central";
 /** Legacy demo URL — still served, but no longer linked from the homepage. */
 export const LEGACY_BARBER_DEMO_SLUG = "barbearia-lisboa";
 
+/** Homepage clinic + /demo tenants that must complete a booking in voice without Cal.com. */
+export function isVoiceDemoSlug(slug: string): boolean {
+  return slug === MARKETING_DEMO_SLUG || slug === LEGACY_BARBER_DEMO_SLUG;
+}
+
 function clinicHours(): WeeklyHours {
   const closed = { open: null, close: null };
   const weekday = { open: 8 * 60, close: 20 * 60 };

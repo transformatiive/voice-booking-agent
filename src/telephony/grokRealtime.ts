@@ -128,6 +128,7 @@ export function buildGrokInstructions(business: Business): string {
       `Timezone: ${business.timezone}. Hours: ${hours}. Services: ${services}.`,
       ...clinicEn,
       "Use tools for availability and booking. Never invent free slots. Only confirm a booking after book_appointment returns ok.",
+      "After a tool returns, speak the result immediately using the speak/message fields. Never stall with 'one moment', 'starting', or filler — the caller must hear times or a taken-slot alternative in the same turn.",
       "Ask the customer's name before booking. If a tool errors, say so briefly and offer another time.",
     ].join(" ");
   }
@@ -147,6 +148,7 @@ export function buildGrokInstructions(business: Business): string {
     `Fuso: ${business.timezone}. Horário: ${hours}. Serviços: ${services}.`,
     ...clinicPt,
     "Usa as ferramentas para disponibilidade e marcações. Nunca inventes horários livres. Só confirma uma marcação depois de book_appointment devolver ok.",
+    "Assim que uma ferramenta devolver, diz já o resultado em voz alta (usa os campos speak/message). Nunca fiques em «um momento», «a começar» ou a pensar — o cliente tem de ouvir horários ou uma alternativa na mesma vez.",
     "Pede o nome do cliente antes de marcar. Se uma ferramenta falhar, diz-o em breve e oferece outra hora.",
   ].join(" ");
 }
