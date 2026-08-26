@@ -1,5 +1,4 @@
 const slug = location.pathname.split("/").pop();
-const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 const el = {
   card: document.getElementById("callcard"),
@@ -22,6 +21,7 @@ const el = {
   prompts: document.getElementById("prompts"),
   bizName: document.getElementById("bizName"),
   bizMeta: document.getElementById("bizMeta"),
+  configErr: document.getElementById("configErr"),
 };
 
 const MIC_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a4 4 0 0 0-4 4v5a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/></svg>`;
@@ -29,20 +29,25 @@ const MIC_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" str
 let locale = "pt";
 let tz = "Europe/Lisbon";
 let agentName = "Sofia";
-let sessionId = newSessionId();
+let grokVoiceEnabled = false;
 let phase = "idle";
 let muted = false;
-let busy = false;
-let listening = false;
+let streaming = false;
 let startedAt = 0;
 let timerId = null;
-let rec = null;
 let capToken = { cancelled: true };
-let autoListen = true;
 
-function newSessionId() {
-  return `call-${Math.random().toString(36).slice(2)}`;
-}
+let ws = null;
+let audioCtx = null;
+let micStream = null;
+let processor = null;
+let player = null;
+let sampleRate = 24000;
+let pendingGreeting = "";
+let greeted = false;
+let pendingTools = new Map();
+let assistantBuf = "";
+let callGeneration = 0;
 
 function copy() {
   if (locale === "en") {
@@ -50,8 +55,9 @@ function copy() {
       ready: "READY TO CALL",
       live: "LIVE CALL",
       ended: "CALL ENDED",
+      blocked: "VOICE NOT CONFIGURED",
       connecting: "Calling…",
-      idleCaption: "Tap Call. Sofia answers on the phone — speak, don't type.",
+      idleCaption: "Tap Call. Sofia answers on Grok Live 2 — speak, don't type.",
       speakNow: "Listening — speak now",
       you: "You",
       voiceCall: "Voice call",
@@ -60,20 +66,22 @@ function copy() {
       call: "Call",
       callAgain: "Call again",
       hangup: "Hang up",
-      talk: "Tap to talk",
+      talk: "Microphone on",
       promptsTitle: "Try saying out loud",
-      noMic: "Microphone isn't available in this browser. Use the keypad only as a fallback.",
+      noMic: "Microphone isn't available. Use the keypad only as a fallback — Sofia still speaks with Grok.",
       fallbackHint: "Fallback if the microphone isn't available — what you would say on the phone:",
       noBookings: "No appointments.",
       error: "I couldn't reach the assistant. Try again.",
+      notConfigured: "Grok voice is not configured in this environment. Set XAI_API_KEY on the server.",
     };
   }
   return {
     ready: "PRONTO A LIGAR",
     live: "CHAMADA AO VIVO",
     ended: "CHAMADA TERMINADA",
+    blocked: "VOZ NÃO CONFIGURADA",
     connecting: "A ligar…",
-    idleCaption: "Toque em Ligar. A Sofia atende ao telefone — fale, não escreva.",
+    idleCaption: "Toque em Ligar. A Sofia atende com Grok Live 2 — fale, não escreva.",
     speakNow: "A ouvir — fale agora",
     you: "Você",
     voiceCall: "Chamada de voz",
@@ -82,12 +90,13 @@ function copy() {
     call: "Ligar",
     callAgain: "Ligar novamente",
     hangup: "Terminar",
-    talk: "Toque para falar",
+    talk: "Microfone ligado",
     promptsTitle: "Experimente dizer em voz",
-    noMic: "Este browser não tem microfone. Use o teclado só como recurso.",
+    noMic: "Este browser não tem microfone. Use o teclado só como recurso — a Sofia continua a falar com a voz Grok.",
     fallbackHint: "Recurso se o microfone não estiver disponível — o que diria ao telefone:",
     noBookings: "Sem marcações.",
     error: "Não consegui contactar o assistente. Tente outra vez.",
+    notConfigured: "A voz Grok não está configurada neste ambiente. Defina XAI_API_KEY no servidor.",
   };
 }
 
@@ -119,6 +128,7 @@ function setPhase(next) {
     el.call.setAttribute("aria-label", t.call);
     el.call.classList.add("start");
     el.call.classList.remove("end");
+    el.call.disabled = !grokVoiceEnabled;
     setWave("idle");
   } else if (next === "live") {
     el.liveLabel.textContent = t.live;
@@ -126,12 +136,22 @@ function setPhase(next) {
     el.call.setAttribute("aria-label", t.hangup);
     el.call.classList.remove("start");
     el.call.classList.add("end");
+    el.call.disabled = false;
+  } else if (next === "blocked") {
+    el.liveLabel.textContent = t.blocked;
+    el.callLabel.textContent = t.call;
+    el.call.setAttribute("aria-label", t.call);
+    el.call.classList.add("start");
+    el.call.classList.remove("end");
+    el.call.disabled = true;
+    setWave("idle");
   } else {
     el.liveLabel.textContent = t.ended;
     el.callLabel.textContent = t.callAgain;
     el.call.setAttribute("aria-label", t.callAgain);
     el.call.classList.add("start");
     el.call.classList.remove("end");
+    el.call.disabled = !grokVoiceEnabled;
     setWave("idle");
   }
   const on = next === "live";
@@ -145,36 +165,10 @@ function setWave(mode) {
   el.wave.className = `waveform ${mode}`;
 }
 
-function setCaption(speaker, text, typewrite = false) {
+function setCaption(speaker, text) {
   el.spk.textContent = speaker;
   capToken.cancelled = true;
-  if (!typewrite) {
-    el.txt.textContent = text;
-    return Promise.resolve();
-  }
-  const token = { cancelled: false };
-  capToken = token;
-  return type(el.txt, text, token);
-}
-
-function type(node, text, token, speed = 18) {
-  return new Promise((resolve) => {
-    let i = 0;
-    function step() {
-      if (token.cancelled || !node.isConnected) return resolve();
-      node.textContent = text.slice(0, i);
-      const c = document.createElement("span");
-      c.className = "cap-cursor";
-      node.appendChild(c);
-      if (i < text.length) {
-        i += 1;
-        setTimeout(step, speed);
-      } else {
-        setTimeout(() => { if (c.parentNode) c.remove(); resolve(); }, 200);
-      }
-    }
-    step();
-  });
+  el.txt.textContent = text;
 }
 
 function fmtTimer(ms) {
@@ -204,205 +198,395 @@ function buildWave() {
   }
 }
 
-function speechLang() {
-  return locale === "en" ? "en-US" : "pt-PT";
-}
-
-function pickVoice() {
-  if (!("speechSynthesis" in window)) return null;
-  const voices = window.speechSynthesis.getVoices();
-  const lang = speechLang();
-  const prefix = lang.slice(0, 2);
-  const female = /female|feminino|mulher|maria|ines|inês|catarina|joana|sonia|sónia/i;
-  return (
-    voices.find((v) => v.lang.startsWith(lang) && female.test(v.name)) ||
-    voices.find((v) => v.lang.startsWith(prefix) && female.test(v.name)) ||
-    voices.find((v) => v.lang.startsWith(lang)) ||
-    voices.find((v) => v.lang.startsWith(prefix)) ||
-    null
-  );
-}
-
-function speak(text) {
-  if (!("speechSynthesis" in window)) return Promise.resolve();
-  return new Promise((resolve) => {
-    let settled = false;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(tid);
-      resolve();
-    };
-    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = speechLang();
-    u.rate = 1.04;
-    const voice = pickVoice();
-    if (voice) u.voice = voice;
-    u.onend = done;
-    u.onerror = done;
-    const tid = setTimeout(done, Math.min(16000, 900 + text.length * 70));
-    try { window.speechSynthesis.speak(u); } catch { done(); return; }
-    setTimeout(() => { if (!window.speechSynthesis.speaking) done(); }, 500);
-  });
-}
-
-function stopSpeech() {
-  try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
-}
-
-function ensureRecognition() {
-  if (!SpeechRec || rec) return rec;
-  rec = new SpeechRec();
-  rec.continuous = false;
-  rec.interimResults = true;
-  rec.maxAlternatives = 1;
-  rec.lang = speechLang();
-  rec.addEventListener("start", () => {
-    listening = true;
-    el.talk.classList.add("listening");
-    setWave(muted ? "muted" : "listening");
-    setCaption(copy().you, copy().speakNow);
-  });
-  rec.addEventListener("result", (event) => {
-    let interim = "";
-    let finalText = "";
-    for (let i = event.resultIndex; i < event.results.length; i += 1) {
-      const piece = event.results[i][0].transcript;
-      if (event.results[i].isFinal) finalText += piece;
-      else interim += piece;
-    }
-    const shown = (finalText || interim).trim();
-    if (shown) setCaption(copy().you, shown);
-    if (finalText.trim()) {
-      const uttered = finalText.trim();
-      stopListening();
-      handleUtterance(uttered);
-    }
-  });
-  rec.addEventListener("end", () => {
-    listening = false;
-    el.talk.classList.remove("listening");
-    if (phase === "live" && !busy && !muted) setWave("idle");
-  });
-  rec.addEventListener("error", (event) => {
-    listening = false;
-    el.talk.classList.remove("listening");
-    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-      showFallback(true);
-      setCaption(agentName, copy().noMic);
-    }
-  });
-  return rec;
-}
-
-function startListening() {
-  if (phase !== "live" || muted || busy) return;
-  if (!SpeechRec) {
-    showFallback(true);
-    return;
-  }
-  const engine = ensureRecognition();
-  engine.lang = speechLang();
-  try { engine.start(); } catch { /* already started */ }
-}
-
-function stopListening() {
-  if (!rec || !listening) return;
-  try { rec.stop(); } catch { /* ignore */ }
-  listening = false;
-  el.talk.classList.remove("listening");
-}
-
 function showFallback(open) {
   el.fallback.hidden = !open;
   el.keypad.setAttribute("aria-pressed", String(open));
   if (open) el.fallbackInput.focus();
 }
 
-async function handleUtterance(text) {
-  if (!text || phase !== "live" || busy) return;
-  busy = true;
-  stopListening();
-  setCaption(copy().you, text);
-  setWave("idle");
-  el.spk.textContent = agentName;
-  el.txt.textContent = copy().thinking;
+function sendEvent(payload) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify(payload));
+}
+
+function floatTo16BitPCM(float32) {
+  const buf = new ArrayBuffer(float32.length * 2);
+  const view = new DataView(buf);
+  for (let i = 0; i < float32.length; i += 1) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return buf;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function base64ToInt16(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new Int16Array(bytes.buffer);
+}
+
+function resample(float32, fromRate, toRate) {
+  if (fromRate === toRate) return float32;
+  const ratio = fromRate / toRate;
+  const outLen = Math.max(1, Math.round(float32.length / ratio));
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i += 1) {
+    const src = i * ratio;
+    const i0 = Math.floor(src);
+    const i1 = Math.min(i0 + 1, float32.length - 1);
+    const frac = src - i0;
+    out[i] = float32[i0] * (1 - frac) + float32[i1] * frac;
+  }
+  return out;
+}
+
+function createPlayer(ctx, inputRate) {
+  let next = 0;
+  return {
+    playing() {
+      return ctx.currentTime < next - 0.04;
+    },
+    pushInt16(int16) {
+      if (!int16.length) return;
+      const f32src = new Float32Array(int16.length);
+      for (let i = 0; i < int16.length; i += 1) f32src[i] = int16[i] / 32768;
+      const f32 = resample(f32src, inputRate, ctx.sampleRate);
+      const buf = ctx.createBuffer(1, f32.length, ctx.sampleRate);
+      buf.getChannelData(0).set(f32);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      const now = ctx.currentTime;
+      if (next < now) next = now;
+      src.start(next);
+      next += buf.duration;
+    },
+    stop() {
+      next = 0;
+    },
+  };
+}
+
+async function ensureAudio() {
+  if (audioCtx && audioCtx.state !== "closed") {
+    if (audioCtx.state === "suspended") await audioCtx.resume();
+    return audioCtx;
+  }
+  audioCtx = new AudioContext();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+  return audioCtx;
+}
+
+async function startMic(ctx) {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showFallback(true);
+    setCaption(agentName, copy().noMic);
+    return false;
+  }
   try {
-    const res = await fetch(`/api/business/${slug}/message`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, text }),
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
     });
-    const data = await res.json();
-    const reply = data.reply || copy().error;
-    el.avatar.classList.add("speaking");
-    setWave("speaking");
-    await Promise.all([speak(reply), setCaption(agentName, reply, true)]);
-    refreshBookings();
   } catch {
-    setCaption(agentName, copy().error);
-  } finally {
-    busy = false;
-    el.avatar.classList.remove("speaking");
-    if (phase === "live") setWave(muted ? "muted" : "idle");
-    if (phase === "live" && !muted && autoListen && SpeechRec && el.fallback.hidden) startListening();
+    showFallback(true);
+    setCaption(agentName, copy().noMic);
+    return false;
+  }
+  const source = ctx.createMediaStreamSource(micStream);
+  const bufferSize = 4096;
+  processor = ctx.createScriptProcessor(bufferSize, 1, 1);
+  processor.onaudioprocess = (event) => {
+    if (!streaming || muted || !ws || ws.readyState !== WebSocket.OPEN) return;
+    const input = event.inputBuffer.getChannelData(0);
+    const at24k = resample(input, ctx.sampleRate, sampleRate);
+    const pcm = floatTo16BitPCM(at24k);
+    sendEvent({ type: "input_audio_buffer.append", audio: arrayBufferToBase64(pcm) });
+  };
+  const muteGain = ctx.createGain();
+  muteGain.gain.value = 0;
+  source.connect(processor);
+  processor.connect(muteGain);
+  muteGain.connect(ctx.destination);
+  streaming = true;
+  el.talk.classList.add("listening");
+  return true;
+}
+
+function stopMic() {
+  streaming = false;
+  el.talk.classList.remove("listening");
+  if (processor) {
+    try { processor.disconnect(); } catch { /* ignore */ }
+    processor.onaudioprocess = null;
+    processor = null;
+  }
+  if (micStream) {
+    for (const track of micStream.getTracks()) track.stop();
+    micStream = null;
   }
 }
 
+function closeSocket() {
+  pendingGreeting = "";
+  greeted = false;
+  pendingTools.clear();
+  if (ws) {
+    try { ws.close(); } catch { /* ignore */ }
+    ws = null;
+  }
+}
+
+function waitUntilQuiet() {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const tick = () => {
+      if (!player || !player.playing() || Date.now() - started > 8000) {
+        resolve();
+        return;
+      }
+      setTimeout(tick, 80);
+    };
+    tick();
+  });
+}
+
+async function flushPendingTools() {
+  if (!pendingTools.size) return;
+  await waitUntilQuiet();
+  if (!pendingTools.size) return;
+  sendEvent({ type: "response.create" });
+}
+
+async function runTool(event, generation) {
+  const callId = event.call_id;
+  const name = event.name;
+  let args = {};
+  try {
+    args = typeof event.arguments === "string" ? JSON.parse(event.arguments || "{}") : (event.arguments || {});
+  } catch {
+    args = {};
+  }
+  pendingTools.set(callId, name);
+  setCaption(agentName, copy().thinking);
+  setWave("idle");
+  let output = { error: "tool_failed" };
+  try {
+    const res = await fetch(`/api/business/${slug}/realtime/tool`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, arguments: args }),
+    });
+    output = await res.json();
+  } catch {
+    output = { error: "tool_unreachable" };
+  }
+  if (generation !== callGeneration || !ws) return;
+  sendEvent({
+    type: "conversation.item.create",
+    item: {
+      type: "function_call_output",
+      call_id: callId,
+      output: JSON.stringify(output),
+    },
+  });
+  pendingTools.delete(callId);
+  if (output.ok === true || output.bookingId) refreshBookings();
+  if (!pendingTools.size) flushPendingTools();
+}
+
+function onRealtimeEvent(event) {
+  const type = event?.type;
+  if (!type) return;
+
+  switch (type) {
+    case "session.updated":
+    case "session.created":
+      if (!greeted && pendingGreeting) {
+        greeted = true;
+        const text = pendingGreeting;
+        pendingGreeting = "";
+        greet(text);
+      }
+      break;
+    case "input_audio_buffer.speech_started":
+      assistantBuf = "";
+      setCaption(copy().you, copy().speakNow);
+      setWave(muted ? "muted" : "listening");
+      el.avatar.classList.remove("speaking");
+      break;
+    case "input_audio_buffer.speech_stopped":
+      setWave("idle");
+      el.spk.textContent = agentName;
+      el.txt.textContent = copy().thinking;
+      break;
+    case "conversation.item.input_audio_transcription.updated":
+    case "conversation.item.input_audio_transcription.completed": {
+      const transcript = event.transcript || event.text || "";
+      if (transcript) setCaption(copy().you, transcript);
+      break;
+    }
+    case "response.created":
+      assistantBuf = "";
+      el.avatar.classList.add("speaking");
+      setWave("speaking");
+      break;
+    case "response.output_audio.delta":
+    case "response.audio.delta": {
+      const b64 = event.delta || event.audio;
+      if (b64 && player) player.pushInt16(base64ToInt16(b64));
+      el.avatar.classList.add("speaking");
+      setWave("speaking");
+      break;
+    }
+    case "response.output_audio_transcript.delta":
+    case "response.audio_transcript.delta":
+    case "response.output_text.delta": {
+      const piece = event.delta || event.text || "";
+      assistantBuf += piece;
+      if (assistantBuf) setCaption(agentName, assistantBuf);
+      break;
+    }
+    case "response.output_audio_transcript.done":
+    case "response.audio_transcript.done":
+    case "response.output_text.done": {
+      const finalText = event.transcript || event.text || assistantBuf;
+      if (finalText) setCaption(agentName, finalText);
+      break;
+    }
+    case "response.function_call_arguments.done":
+      runTool(event, callGeneration);
+      break;
+    case "response.done":
+      el.avatar.classList.remove("speaking");
+      if (phase === "live") setWave(muted ? "muted" : streaming ? "listening" : "idle");
+      refreshBookings();
+      break;
+    case "error": {
+      const msg = event.error?.message || event.message || copy().error;
+      setCaption(agentName, msg);
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+function greet(text) {
+  sendEvent({
+    type: "conversation.item.create",
+    item: {
+      type: "force_message",
+      role: "assistant",
+      interruptible: true,
+      content: [{ type: "output_text", text }],
+    },
+  });
+  setCaption(agentName, text);
+}
+
 async function startCall() {
-  if (phase === "live" || busy) return;
+  if (phase === "live" || !grokVoiceEnabled) return;
   const t = copy();
-  sessionId = newSessionId();
+  callGeneration += 1;
+  const generation = callGeneration;
   muted = false;
-  autoListen = true;
   el.mute.classList.remove("muted");
   el.mute.setAttribute("aria-pressed", "false");
   setPhase("live");
   startTimer();
   setCaption(agentName, t.connecting);
   setWave("speaking");
-  busy = true;
+
+  let session;
   try {
-    const g = await fetch(`/api/business/${slug}/greeting`).then((r) => r.json());
-    const reply = g.reply || t.connecting;
-    el.avatar.classList.add("speaking");
-    await Promise.all([speak(reply), setCaption(agentName, reply, true)]);
-    el.avatar.classList.remove("speaking");
-    setWave("idle");
-    if (!SpeechRec) {
-      autoListen = false;
-      showFallback(true);
-    } else if (!muted) startListening();
+    const res = await fetch(`/api/business/${slug}/realtime/session`, { method: "POST" });
+    session = await res.json();
+    if (!res.ok) {
+      setCaption(agentName, session.message || t.notConfigured);
+      await hangUp({ silent: true });
+      return;
+    }
   } catch {
     setCaption(agentName, t.error);
-    setWave("idle");
-  } finally {
-    busy = false;
-    el.avatar.classList.remove("speaking");
+    await hangUp({ silent: true });
+    return;
   }
+  if (generation !== callGeneration) return;
+
+  sampleRate = session.sampleRate || 24000;
+  pendingGreeting = session.greeting || "";
+  greeted = false;
+  const ctx = await ensureAudio();
+  player = createPlayer(ctx, sampleRate);
+
+  ws = new WebSocket(session.wsUrl, [`xai-client-secret.${session.token}`]);
+  ws.addEventListener("open", async () => {
+    if (generation !== callGeneration) return;
+    sendEvent({ type: "session.update", session: session.session });
+    const micOk = await startMic(ctx);
+    if (!micOk) setWave("idle");
+    else setWave("listening");
+    setTimeout(() => {
+      if (generation !== callGeneration) return;
+      if (!greeted && pendingGreeting) {
+        greeted = true;
+        const text = pendingGreeting;
+        pendingGreeting = "";
+        greet(text);
+      }
+    }, 900);
+  });
+  ws.addEventListener("message", (msg) => {
+    if (generation !== callGeneration) return;
+    if (typeof msg.data !== "string") return;
+    let event;
+    try { event = JSON.parse(msg.data); } catch { return; }
+    onRealtimeEvent(event);
+  });
+  ws.addEventListener("close", () => {
+    if (generation !== callGeneration) return;
+    if (phase === "live") hangUp();
+  });
+  ws.addEventListener("error", () => {
+    if (generation !== callGeneration) return;
+    setCaption(agentName, t.error);
+  });
 }
 
-async function hangUp() {
-  busy = false;
-  autoListen = false;
-  stopListening();
-  stopSpeech();
+async function hangUp(opts = {}) {
+  callGeneration += 1;
+  stopMic();
+  closeSocket();
+  if (player) player.stop();
+  if (audioCtx && audioCtx.state !== "closed") {
+    try { await audioCtx.suspend(); } catch { /* ignore */ }
+  }
   stopTimer();
   el.avatar.classList.remove("speaking");
   showFallback(false);
-  setPhase("ended");
-  setCaption(agentName, copy().endedCaption);
-  try {
-    await fetch(`/api/business/${slug}/reset`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId }),
-    });
-  } catch { /* ignore */ }
+  if (!opts.silent) {
+    setPhase("ended");
+    setCaption(agentName, copy().endedCaption);
+  } else if (!grokVoiceEnabled) {
+    setPhase("blocked");
+  } else {
+    setPhase("idle");
+  }
 }
 
 function onCallButton() {
+  if (!grokVoiceEnabled || phase === "blocked") return;
   if (phase === "live") hangUp();
   else startCall();
 }
@@ -413,27 +597,46 @@ function toggleMute() {
   el.mute.classList.toggle("muted", muted);
   el.mute.setAttribute("aria-pressed", String(muted));
   if (muted) {
-    stopListening();
+    el.talk.classList.remove("listening");
     setWave("muted");
   } else {
-    setWave("idle");
-    if (!busy) startListening();
+    el.talk.classList.add("listening");
+    setWave("listening");
   }
 }
 
 function toggleTalk() {
-  if (phase !== "live" || muted || busy) return;
-  if (listening) stopListening();
-  else startListening();
+  if (phase !== "live" || muted) return;
+  streaming = !streaming;
+  el.talk.classList.toggle("listening", streaming);
+  setWave(streaming ? "listening" : "idle");
+}
+
+function sendTyped(text) {
+  if (!text || phase !== "live") return;
+  setCaption(copy().you, text);
+  sendEvent({
+    type: "conversation.item.create",
+    item: {
+      type: "message",
+      role: "user",
+      content: [{ type: "input_text", text }],
+    },
+  });
+  sendEvent({ type: "response.create" });
 }
 
 async function onPrompt(event) {
   event.preventDefault();
+  if (!grokVoiceEnabled) return;
   if (phase !== "live") {
     await startCall();
     return;
   }
-  if (!busy) startListening();
+  if (muted) toggleMute();
+  streaming = true;
+  el.talk.classList.add("listening");
+  setWave("listening");
 }
 
 async function refreshBookings() {
@@ -465,13 +668,8 @@ el.fallback.addEventListener("submit", (event) => {
   const text = el.fallbackInput.value.trim();
   if (!text) return;
   el.fallbackInput.value = "";
-  handleUtterance(text);
+  sendTyped(text);
 });
-
-if ("speechSynthesis" in window) {
-  window.speechSynthesis.getVoices();
-  window.speechSynthesis.addEventListener("voiceschanged", () => pickVoice());
-}
 
 buildWave();
 
@@ -485,14 +683,13 @@ async function init() {
     locale = b.locale;
     tz = b.timezone || "Europe/Lisbon";
     agentName = b.agentName || "Sofia";
+    grokVoiceEnabled = Boolean(data.features?.grokVoice);
     el.bizName.textContent = b.name;
     el.bizMeta.textContent = `${b.plan.name} · ${b.number ? b.number.e164 : "sem número"} · assistente ${agentName}`;
     el.name.textContent = agentName;
     el.role.textContent = locale === "en" ? "Voice assistant" : "Assistente de voz";
     el.avatar.textContent = (agentName[0] || "S").toUpperCase();
     el.fallback.querySelector("p").textContent = copy().fallbackHint;
-    setPhase("idle");
-    setCaption(copy().voiceCall, copy().idleCaption);
     el.prompts.innerHTML = "";
     for (const line of voicePrompts(b.services)) {
       const btn = document.createElement("button");
@@ -503,6 +700,16 @@ async function init() {
       el.prompts.appendChild(btn);
     }
     refreshBookings();
+    if (!grokVoiceEnabled) {
+      el.configErr.hidden = false;
+      el.configErr.textContent = copy().notConfigured;
+      setPhase("blocked");
+      setCaption(copy().voiceCall, copy().notConfigured);
+    } else {
+      el.configErr.hidden = true;
+      setPhase("idle");
+      setCaption(copy().voiceCall, copy().idleCaption);
+    }
   } catch {
     el.bizName.textContent = t.error;
   }

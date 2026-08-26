@@ -80,4 +80,45 @@ describe("voice function webhook", () => {
     expect(booked.ok).toBe(true);
     expect(store.listBookings(business.id)).toHaveLength(1);
   });
+
+  it("lists and cancels bookings", async () => {
+    const { store, business } = makeBusiness();
+    const scheduler = new InMemoryScheduler(store, () => NOW);
+    const serviceName = business.services[0].name;
+    const slots = (await handleVoiceFunction(
+      business,
+      store,
+      scheduler,
+      { name: "get_slots", arguments: { service: serviceName, date: "2026-08-27" } },
+      NOW,
+    )) as { slots: string[] };
+
+    await handleVoiceFunction(
+      business,
+      store,
+      scheduler,
+      { name: "book_appointment", arguments: { service: serviceName, start: slots.slots[0], customerName: "Ana" } },
+      NOW,
+    );
+
+    const listed = (await handleVoiceFunction(
+      business,
+      store,
+      scheduler,
+      { name: "list_bookings", arguments: {} },
+      NOW,
+    )) as { bookings: { id: string; serviceName: string }[] };
+    expect(listed.bookings).toHaveLength(1);
+    expect(listed.bookings[0].serviceName).toBe(serviceName);
+
+    const cancelled = (await handleVoiceFunction(
+      business,
+      store,
+      scheduler,
+      { name: "cancel_appointment", arguments: { bookingId: listed.bookings[0].id } },
+      NOW,
+    )) as { ok: boolean };
+    expect(cancelled.ok).toBe(true);
+    expect(store.listBookings(business.id)).toHaveLength(0);
+  });
 });

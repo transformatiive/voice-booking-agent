@@ -36,7 +36,7 @@ Caller ──▶ DID (+351, Telnyx/Zadarma) ──SIP──▶ voice stack (Grok
                                                      ▼
                           /voice/functions/:slug  →  Scheduler (Cal.com ⇄ Google)
                                                      ▲
-Web/voice demo ──▶ /api/business/:slug/message ──── ConversationManager
+Web demo ──▶ Grok Live 2 WS (ephemeral token) ── tool calls ──▶ /realtime/tool
 ```
 
 | Layer | Path |
@@ -60,7 +60,7 @@ npm run dev            # http://localhost:3000
 
 - Landing: `/`
 - Backoffice: `/app/:slug` (a demo `barbearia-lisboa` is seeded)
-- Voice demo: `/demo/:slug` (in-browser **voice call** with Sofia — not a text chat)
+- Voice demo: `/demo/:slug` (in-browser **Grok Live 2** speech-to-speech call — not a text chat)
 
 Copy `.env.example` and fill only the integrations you want to activate.
 
@@ -84,7 +84,9 @@ Copy `.env.example` and fill only the integrations you want to activate.
 | GET/PUT | `/api/business/:slug` | Read / update config |
 | POST | `/api/business/:slug/number` | Provision a +351 number |
 | POST | `/api/business/:slug/resource/:rid/toggle` | Disponível / A cortar |
-| POST | `/api/business/:slug/message` | Talk to the agent |
+| POST | `/api/business/:slug/message` | Talk to the agent (text NLU fallback) |
+| POST | `/api/business/:slug/realtime/session` | Mint a Grok Live 2 ephemeral token for the demo |
+| POST | `/api/business/:slug/realtime/tool` | Execute a Grok function tool against the business |
 | POST | `/api/business/:slug/checkout` \| `/portal` | Stripe checkout / portal |
 | POST | `/voice/incoming/:slug` | Inbound-call TeXML |
 | POST | `/voice/functions/:slug` | Voice-LLM function calls (`get_slots`, `book_appointment`, …) |

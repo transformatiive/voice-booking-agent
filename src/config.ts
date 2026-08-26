@@ -59,6 +59,10 @@ export const config = {
   voice: {
     /** Shared secret to authenticate Retell/Vapi function webhooks. */
     functionWebhookSecret: env("VOICE_FUNCTION_SECRET"),
+    /** xAI Grok Live 2. Read live so tests can stub env; never expose to the browser. */
+    get xaiApiKey(): string | undefined {
+      return env("XAI_API_KEY");
+    },
   },
 } as const;
 
@@ -68,6 +72,7 @@ export function featureFlags() {
     stripe: Boolean(config.billing.stripeSecretKey),
     telnyx: Boolean(config.telephony.telnyxApiKey),
     zadarma: Boolean(config.telephony.zadarmaKey && config.telephony.zadarmaSecret),
+    grokVoice: Boolean(config.voice.xaiApiKey),
   };
 }
 

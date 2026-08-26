@@ -13,6 +13,7 @@ import { ConversationManager, greeting } from "./agent/conversation.js";
 import { BillingService } from "./billing/stripe.js";
 import { TelephonyService } from "./telephony/index.js";
 import { buildIncomingTeXML, handleVoiceFunction } from "./telephony/voice.js";
+import { handleRealtimeSessionRequest, parseToolArguments } from "./telephony/grokRealtime.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
@@ -213,6 +214,36 @@ app.post("/api/business/:slug/reset", (req, res) => {
 });
 
 // ---- Voice (telephony) ----
+
+app.post("/api/business/:slug/realtime/session", async (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const result = await handleRealtimeSessionRequest({
+    business,
+    apiKey: config.voice.xaiApiKey,
+  });
+  res.status(result.status).json(result.body);
+});
+
+app.post("/api/business/:slug/realtime/tool", async (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  if (!featureFlags().grokVoice) {
+    res.status(503).json({
+      error: "grok_voice_not_configured",
+      message:
+        business.locale === "en"
+          ? "Grok voice is not configured in this environment."
+          : "A voz Grok não está configurada neste ambiente.",
+    });
+    return;
+  }
+  const result = await handleVoiceFunction(business, store, scheduler, {
+    name: String(req.body?.name ?? ""),
+    arguments: parseToolArguments(req.body?.arguments),
+  });
+  res.json(result);
+});
 
 app.post("/voice/incoming/:slug", (req, res) => {
   const business = store.getBusinessBySlug(req.params.slug);
