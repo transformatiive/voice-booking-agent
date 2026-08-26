@@ -90,6 +90,23 @@ document.querySelectorAll("[data-count]").forEach((el) => countObserver.observe(
 /* ---------- ROI ---------- */
 const CONVERSION = 0.6, WEEKS = 4.33;
 const calls = document.getElementById("calls"), ticket = document.getElementById("ticket");
+const bizType = document.getElementById("bizType");
+// Typical starting values per business type (average ticket €, missed calls/week).
+const BIZ_PRESETS = {
+  barbearia: { ticket: 15, calls: 12 },
+  salao: { ticket: 35, calls: 12 },
+  estetica: { ticket: 45, calls: 10 },
+  clinica: { ticket: 60, calls: 14 },
+  restaurante: { ticket: 30, calls: 18 },
+  servicos: { ticket: 90, calls: 8 },
+  outro: { ticket: 25, calls: 10 },
+};
+function applyPreset() {
+  const p = BIZ_PRESETS[bizType.value] || BIZ_PRESETS.outro;
+  ticket.value = Math.min(Number(ticket.max), p.ticket);
+  calls.value = Math.min(Number(calls.max), p.calls);
+  updateRoi();
+}
 function updateRoi() {
   const c = Number(calls.value), t = Number(ticket.value);
   document.getElementById("callsVal").textContent = c;
@@ -102,6 +119,7 @@ function updateRoi() {
 }
 calls.addEventListener("input", updateRoi);
 ticket.addEventListener("input", updateRoi);
+bizType.addEventListener("change", applyPreset);
 updateRoi();
 
 /* ---------- FAQ ---------- */
@@ -147,12 +165,12 @@ if (wave) {
 
 /* ---------- Hero live-call caption ---------- */
 const HERO_SCRIPT = [
-  ["Cliente", "Boa tarde! Queria marcar um corte para amanhã."],
+  ["Cliente", "Boa tarde! Queria marcar para amanhã."],
   ["Sofia", "Com certeza. Tenho às 15h00 ou às 16h30 — qual prefere?"],
-  ["Cliente", "16h30, com o João, se der."],
-  ["Sofia", "Fica com o João, amanhã às 16h30. Em que nome?"],
+  ["Cliente", "16h30, se der."],
+  ["Sofia", "Perfeito. Em que nome fica a marcação?"],
   ["Cliente", "Miguel Sousa."],
-  ["Sofia", "Marcado, Miguel! Envio confirmação por SMS."],
+  ["Sofia", "Marcado, Miguel — amanhã às 16h30. Envio confirmação por SMS."],
 ];
 async function heroLoop() {
   const spk = document.getElementById("heroSpk"), txt = document.getElementById("heroTxt"), timer = document.getElementById("ccTimer");
@@ -174,7 +192,7 @@ async function heroLoop() {
 /* ---------- Conversation examples ---------- */
 const SCEN = {
   marcacao: {
-    title: "Marcar hora · Barbearia do Zé",
+    title: "Marcar hora · Barbearia",
     lines: [
       ["client", "Boa tarde, queria marcar um corte e barba."],
       ["agent", "Claro! Para que dia gostaria?"],
@@ -188,39 +206,39 @@ const SCEN = {
     chip: "Marcado · Corte + barba · sex 17:30",
   },
   remarcar: {
-    title: "Remarcar · Barbearia do Zé",
+    title: "Remarcar · Clínica",
     lines: [
-      ["client", "Tenho marcação amanhã mas preciso de mudar."],
-      ["agent", "Sem problema. Encontrei a sua marcação de amanhã às 15h. Para quando prefere?"],
+      ["client", "Tenho consulta amanhã mas preciso de mudar."],
+      ["agent", "Sem problema. Encontrei a sua consulta de amanhã às 15h. Para quando prefere?"],
       ["client", "Pode ser quinta à mesma hora?"],
       ["agent", "Quinta às 15h está livre. Confirmo a remarcação?"],
       ["client", "Sim, obrigado."],
-      ["agent", "Feito! Atualizei a agenda e envio a nova confirmação."],
+      ["agent", "Feito! Atualizei a agenda e envio a nova confirmação por SMS."],
     ],
     chip: "Remarcado · qui 15:00",
   },
   fora: {
-    title: "Fora de horas · domingo à noite",
+    title: "Fora de horas · Restaurante",
     lines: [
-      ["agent", "Barbearia do Zé, fala a Sofia. Estamos fechados, mas posso deixar-lhe uma hora marcada."],
-      ["client", "Queria cortar na segunda de manhã."],
-      ["agent", "Segunda tenho às 9h30 ou às 10h00."],
-      ["client", "9h30 está ótimo."],
-      ["agent", "Marquei para segunda às 9h30. Bom domingo!"],
+      ["agent", "Restaurante Oliveira, fala a Sofia. Estamos fechados, mas posso tratar da sua reserva."],
+      ["client", "Queria mesa para 4 no sábado às 20h."],
+      ["agent", "Sábado às 20h temos mesa para 4. Em que nome reservo?"],
+      ["client", "Em nome de Andrade."],
+      ["agent", "Reservado, Sr. Andrade — sábado às 20h, mesa para 4. Até lá!"],
     ],
-    chip: "Marcado fora de horas · seg 09:30",
+    chip: "Reserva fora de horas · sáb 20:00",
   },
   precos: {
-    title: "Preços e serviços · Barbearia do Zé",
+    title: "Preços e serviços · Salão",
     lines: [
-      ["client", "Quanto fica o corte com barba?"],
-      ["agent", "O corte + barba fica a 18€ e demora cerca de 45 minutos."],
+      ["client", "Quanto fica uma coloração?"],
+      ["agent", "A coloração fica a 55€ e demora cerca de 90 minutos."],
       ["client", "E têm vaga esta quinta?"],
-      ["agent", "Temos. Quer que marque para quinta?"],
-      ["client", "Sim, às 18h."],
-      ["agent", "Marcado — quinta às 18h, corte + barba (18€)."],
+      ["agent", "Temos às 14h ou às 16h. Quer que marque?"],
+      ["client", "Às 16h, por favor."],
+      ["agent", "Marcado — quinta às 16h, coloração (55€). Envio confirmação."],
     ],
-    chip: "Informado + marcado · qui 18:00",
+    chip: "Informado + marcado · qui 16:00",
   },
 };
 const SCEN_ORDER = ["marcacao", "remarcar", "fora", "precos"];

@@ -61,8 +61,14 @@ h2.title { font-family: var(--serif); font-weight: 500; font-size: clamp(30px, 4
 .header-inner { display: flex; align-items: center; justify-content: space-between; padding: 15px 24px; max-width: var(--maxw); margin: 0 auto; transition: padding .25s; }
 .site-header.scrolled .header-inner { padding: 10px 24px; }
 .logo { display: inline-flex; align-items: center; gap: 11px; font-family: var(--serif); font-weight: 600; font-size: 21px; letter-spacing: -0.01em; }
-.pole { width: 15px; height: 28px; border-radius: 7px; overflow: hidden; border: 1.5px solid rgba(23,19,15,.14); flex: none; background: repeating-linear-gradient(45deg, var(--accent) 0 6px, #fff 6px 12px, #2f2a24 12px 18px, #fff 18px 24px); background-size: 100% 34px; animation: pole 2.6s linear infinite; }
-@keyframes pole { to { background-position: 0 34px; } }
+.mark { width: 30px; height: 30px; border-radius: 9px; flex: none; display: grid; place-items: center; color: #fff; background: linear-gradient(150deg, #241a16, var(--accent)); }
+.mark svg { width: 16px; height: 16px; }
+.mark svg path { animation: eq 1.4s ease-in-out infinite; transform-origin: center; }
+.mark svg path:nth-child(2) { animation-delay: .15s; }
+.mark svg path:nth-child(3) { animation-delay: .3s; }
+.mark svg path:nth-child(4) { animation-delay: .45s; }
+.mark svg path:nth-child(5) { animation-delay: .6s; }
+@keyframes eq { 0%, 100% { transform: scaleY(.7); } 50% { transform: scaleY(1.15); } }
 .nav { display: flex; align-items: center; gap: 26px; }
 .nav-links { display: flex; gap: 24px; color: var(--ink-soft); font-size: 15px; font-weight: 500; }
 .nav-links a { position: relative; }
