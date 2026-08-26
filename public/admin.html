@@ -4,41 +4,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Atende · Backoffice</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/landing.css" />
+    <link rel="stylesheet" href="/app.css" />
   </head>
   <body>
-    <div class="admin-shell">
+    <div class="app" id="app">
       <aside class="side">
-        <div class="brand"><span class="dot">A</span> Atende</div>
-        <nav id="nav">
-          <a data-tab="overview" class="active">Visão geral</a>
-          <a data-tab="assistant">Assistente</a>
-          <a data-tab="resources">Recursos</a>
-          <a data-tab="services">Serviços</a>
-          <a data-tab="hours">Horários</a>
-          <a data-tab="scheduling">Agenda / Cal.com</a>
-          <a data-tab="billing">Faturação</a>
-          <a data-tab="bookings">Marcações</a>
-        </nav>
-        <div style="margin-top:24px">
-          <a class="btn btn-ghost btn-sm" id="demoLink" href="#">Testar assistente →</a>
+        <a class="logo" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4"/><path d="M8 6.5v11"/><path d="M12 3v18"/><path d="M16 6.5v11"/><path d="M20 10v4"/></svg></span> Atende</a>
+        <div class="biz-mini">
+          <div class="name" id="bizName">…</div>
+          <div class="meta" id="bizMeta"></div>
+        </div>
+        <nav id="nav"></nav>
+        <div class="side-foot">
+          <a class="btn btn-ghost btn-sm" id="demoLink" href="#" style="width:100%; justify-content:center;">Testar assistente →</a>
         </div>
       </aside>
-
-      <main class="main">
-        <div id="flash"></div>
-        <h1 id="bizName">…</h1>
-        <p class="muted" id="bizMeta"></p>
-
-        <div id="tab-overview" class="tab"></div>
-        <div id="tab-assistant" class="tab hidden"></div>
-        <div id="tab-resources" class="tab hidden"></div>
-        <div id="tab-services" class="tab hidden"></div>
-        <div id="tab-hours" class="tab hidden"></div>
-        <div id="tab-scheduling" class="tab hidden"></div>
-        <div id="tab-billing" class="tab hidden"></div>
-        <div id="tab-bookings" class="tab hidden"></div>
-      </main>
+      <main class="main" id="main"></main>
     </div>
     <script src="/admin.js"></script>
   </body>

@@ -1,5 +1,5 @@
 /* Atende — landing (premium, white, editorial). Voice-first.
-   Scoped to marketing; backoffice/demo keep styles.css. */
+   Marketing site; the backoffice/demo reuse these tokens via app.css. */
 
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap");
 

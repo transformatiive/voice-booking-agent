@@ -415,6 +415,15 @@
           </div>
           <label for="locale">Idioma</label>
           <select id="locale" name="locale"><option value="pt" selected>Português</option><option value="en">Inglês</option></select>
+          <div class="row">
+            <div><label for="contactEmail">Email de contacto</label><input id="contactEmail" name="contactEmail" type="email" placeholder="voce@exemplo.pt" required /></div>
+            <div><label for="contactPhone">Telemóvel (opcional)</label><input id="contactPhone" name="contactPhone" placeholder="+3519…" /></div>
+          </div>
+          <label for="numberPreference">Número de telefone</label>
+          <select id="numberPreference" name="numberPreference">
+            <option value="new">Quero um número +351 novo (incluído)</option>
+            <option value="port">Quero manter o meu número atual (portabilidade)</option>
+          </select>
           <p class="hint" style="margin-top:16px; margin-bottom:0;">Ao criar, aceita os <a href="/termos" target="_blank" style="color:var(--accent)">Termos de Serviço</a> e a <a href="/privacidade" target="_blank" style="color:var(--accent)">Política de Privacidade</a>.</p>
           <button type="submit" class="btn btn-primary">Criar assistente →</button>
         </form>

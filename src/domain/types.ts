@@ -60,6 +60,11 @@ export interface Subscription {
   currentPeriodEnd: string | null;
 }
 
+/** "pending" while we handle the number + SIP setup; "active" once ready. */
+export type AccountStatus = "pending" | "active";
+
+export type NumberPreference = "new" | "port";
+
 export interface Business {
   id: string;
   slug: string;
@@ -69,6 +74,10 @@ export interface Business {
   agentName: string;
   agentGender: AgentGender;
   timezone: string;
+  status: AccountStatus;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  numberPreference: NumberPreference;
   hours: WeeklyHours;
   services: Service[];
   resources: Resource[];

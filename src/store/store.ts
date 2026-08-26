@@ -4,6 +4,7 @@ import type {
   Booking,
   Business,
   Locale,
+  NumberPreference,
   PlanId,
   UseCase,
 } from "../domain/types.js";
@@ -20,6 +21,10 @@ export interface CreateBusinessInput {
   agentGender: AgentGender;
   planId: PlanId;
   timezone?: string;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  numberPreference?: NumberPreference;
+  status?: "pending" | "active";
 }
 
 function slugify(name: string): string {
@@ -99,6 +104,10 @@ export class Store {
       agentName: input.agentName,
       agentGender: input.agentGender,
       timezone: input.timezone ?? "Europe/Lisbon",
+      status: input.status ?? "pending",
+      contactEmail: input.contactEmail ?? null,
+      contactPhone: input.contactPhone ?? null,
+      numberPreference: input.numberPreference ?? "new",
       hours: defaultHours(),
       services: defaultServices(input.useCase),
       resources: [

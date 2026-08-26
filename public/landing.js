@@ -54,7 +54,11 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal
 document.getElementById("onboardForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = e.currentTarget;
-  const payload = { name: f.name.value, useCase: f.useCase.value, planId: f.planId.value, agentName: f.agentName.value, agentGender: f.agentGender.value, locale: f.locale.value };
+  const payload = {
+    name: f.name.value, useCase: f.useCase.value, planId: f.planId.value,
+    agentName: f.agentName.value, agentGender: f.agentGender.value, locale: f.locale.value,
+    contactEmail: f.contactEmail.value, contactPhone: f.contactPhone.value, numberPreference: f.numberPreference.value,
+  };
   const res = await fetch("/api/onboard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
   const data = await res.json();
   if (data.slug) window.location.href = `/app/${data.slug}?onboarded=1`;
