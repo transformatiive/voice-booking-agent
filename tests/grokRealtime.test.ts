@@ -110,9 +110,16 @@ describe("grok realtime session", () => {
     const dumped = JSON.stringify(result.body);
     expect(dumped).not.toContain(FAKE_KEY);
     expect(dumped).not.toMatch(/xai-test-key-should-never-leak/);
-    const session = result.body.session as { voice: string; tools: { name: string }[]; audio: { input: { transcription: { language_hint: string } } } };
+    const session = result.body.session as {
+      voice: string;
+      tools: { name: string }[];
+      audio: { input: { transcription: { language_hint: string } } };
+      turn_detection: { type: string; threshold: number };
+    };
     expect(session.voice).toBe("ara");
     expect(session.audio.input.transcription.language_hint).toBe("pt-PT");
+    expect(session.turn_detection.type).toBe("server_vad");
+    expect(session.turn_detection.threshold).toBe(0.45);
     expect(session.tools.map((t) => t.name)).toContain("get_slots");
     expect(session.tools.map((t) => t.name)).toContain("book_appointment");
     expect(mintRealtimeClientSecret).toBeTypeOf("function");

@@ -181,42 +181,79 @@ const onScroll = () => header.classList.toggle("scrolled", window.scrollY > 12);
 window.addEventListener("scroll", onScroll, { passive: true });
 onScroll();
 
-/* ---------- Waveform ---------- */
-const wave = document.getElementById("wave");
-if (wave) {
-  for (let i = 0; i < 30; i++) {
-    const b = document.createElement("i");
-    b.style.animationDelay = `${(i * 0.045).toFixed(2)}s`;
-    b.style.animationDuration = `${(0.8 + Math.random() * 0.7).toFixed(2)}s`;
-    wave.appendChild(b);
-  }
+/* ---------- Homepage live clinic call (Grok Live 2) ---------- */
+const HERO_IDLE_SPEAKER = "Sofia · assistente";
+const HERO_IDLE_CAPTION = "Marcado, Miguel — consulta de dermatologia amanhã às 16h30. Envio confirmação por SMS.";
+
+const heroSession = window.AtendeVoiceCall.create({
+  slug: "clinica-central",
+  els: {
+    card: document.getElementById("heroCallcard"),
+    liveLabel: document.getElementById("heroLiveLabel"),
+    timer: document.getElementById("ccTimer"),
+    avatar: document.getElementById("heroAvatar"),
+    name: document.getElementById("heroAgentNm"),
+    role: document.getElementById("heroAgentRl"),
+    wave: document.getElementById("wave"),
+    spk: document.getElementById("heroSpk"),
+    txt: document.getElementById("heroTxt"),
+    mute: document.getElementById("heroMute"),
+    call: document.getElementById("heroCall"),
+    callLabel: document.getElementById("heroCallLabel"),
+    keypad: document.getElementById("heroKeypad"),
+    micErr: document.getElementById("heroMicErr"),
+    configErr: document.getElementById("heroConfigErr"),
+  },
+  ui: {
+    keepLiveBadge: true,
+    startLabel: "Iniciar chamada",
+    idleSpeaker: HERO_IDLE_SPEAKER,
+    idleCaption: HERO_IDLE_CAPTION,
+    agentName: "Sofia",
+  },
+});
+
+function scrollToDemoCard() {
+  const card = document.getElementById("demo-call");
+  if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-/* ---------- Hero live-call caption ---------- */
-const HERO_SCRIPT = [
-  ["Cliente", "Boa tarde! Queria marcar para amanhã."],
-  ["Sofia", "Com certeza. Tenho às 15h00 ou às 16h30 — qual prefere?"],
-  ["Cliente", "16h30, se der."],
-  ["Sofia", "Perfeito. Em que nome fica a marcação?"],
-  ["Cliente", "Miguel Sousa."],
-  ["Sofia", "Marcado, Miguel — amanhã às 16h30. Envio confirmação por SMS."],
-];
-async function heroLoop() {
-  const spk = document.getElementById("heroSpk"), txt = document.getElementById("heroTxt"), timer = document.getElementById("ccTimer");
-  if (!spk || !txt) return;
-  const token = { cancelled: false };
-  while (true) {
-    let secs = 0; timer.textContent = "00:00";
-    const clk = setInterval(() => { secs++; timer.textContent = `00:${String(secs).padStart(2, "0")}`; }, 1000);
-    for (const [who, text] of HERO_SCRIPT) {
-      spk.textContent = who === "Sofia" ? "Sofia · assistente" : "Cliente";
-      await type(txt, text, token, 26);
-      await sleep(1300);
-    }
-    clearInterval(clk);
-    await sleep(1200);
-  }
+async function initHeroCall() {
+  let slug = "clinica-central";
+  let grokVoice = false;
+  let agentName = "Sofia";
+  try {
+    const demoRes = await fetch("/api/demo");
+    const demo = await demoRes.json();
+    if (demo.slug) slug = demo.slug;
+    grokVoice = Boolean(demo.features?.grokVoice);
+    if (demo.agentName) agentName = demo.agentName;
+  } catch { /* keep defaults */ }
+  heroSession.setSlug(slug);
+  await heroSession.init({
+    slug,
+    locale: "pt",
+    agentName,
+    grokVoice,
+    idleSpeaker: HERO_IDLE_SPEAKER,
+    idleCaption: HERO_IDLE_CAPTION,
+  });
 }
+
+document.getElementById("heroDemoCta")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  scrollToDemoCard();
+  heroSession.startCall();
+});
+document.querySelectorAll('a[href="#demo-call"]').forEach((link) => {
+  if (link.id === "heroDemoCta") return;
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    scrollToDemoCard();
+  });
+});
+
+initHeroCall();
 
 /* ---------- Conversation examples ---------- */
 const SCEN = {
@@ -323,4 +360,3 @@ if (exBody) {
 document.getElementById("year").textContent = new Date().getFullYear();
 observeReveals();
 loadPlans();
-heroLoop();

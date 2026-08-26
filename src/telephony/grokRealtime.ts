@@ -39,7 +39,7 @@ export const GROK_VOICE_TOOLS: GrokFunctionTool[] = [
     parameters: {
       type: "object",
       properties: {
-        service: { type: "string", description: "Service name as the caller said it, e.g. Corte de cabelo" },
+        service: { type: "string", description: "Service name as the caller said it, e.g. Dermatologia" },
         date: { type: "string", description: "ISO date or datetime to search around, e.g. 2026-08-27" },
       },
       required: ["service"],
@@ -115,20 +115,37 @@ export function buildGrokInstructions(business: Business): string {
   const hours = formatHoursSummary(business.hours, business.locale);
 
   if (business.locale === "en") {
+    const clinicEn =
+      business.useCase === "clinica"
+        ? [
+            "You are the clinic receptionist. You only book consultations — never give medical advice, diagnoses, symptom triage, or clinical opinions.",
+            "Ask which specialty they need, propose real slots from tools, confirm name and phone, then say you will send an SMS confirmation.",
+          ]
+        : [];
     return [
       `You are ${agent}, the appointment voice agent for ${business.name}.`,
       "Speak English. Keep replies short, like a phone call — one or two sentences.",
       `Timezone: ${business.timezone}. Hours: ${hours}. Services: ${services}.`,
+      ...clinicEn,
       "Use tools for availability and booking. Never invent free slots. Only confirm a booking after book_appointment returns ok.",
       "Ask the customer's name before booking. If a tool errors, say so briefly and offer another time.",
     ].join(" ");
   }
 
+  const clinicPt =
+    business.useCase === "clinica"
+      ? [
+          "És a recepcionista da clínica: só marcas consultas. Nunca dês conselhos médicos, diagnósticos, triagem de sintomas nem opiniões clínicas.",
+          "Pergunta a especialidade (clínica geral, dermatologia, pediatria, medicina dentária, ou as que o negócio listar), propõe horários reais com as ferramentas, confirma o nome e o telemóvel, e diz que envias um SMS de confirmação.",
+        ]
+      : [];
+
   return [
     `És a ${agent}, assistente de voz de marcações da ${business.name}.`,
-    "Fala sempre português de Portugal (não brasileiro): usa «marcação», «telemóvel», evita sotaque e vocabulário do Brasil (celular, vocês aí, a gente, horáriozinho).",
+    "Fala sempre português de Portugal (não brasileiro): usa «marcação», «telemóvel», «consulta», evita sotaque e vocabulário do Brasil (celular, vocês aí, a gente, horáriozinho).",
     "Respostas curtas, estilo chamada telefónica — uma ou duas frases.",
     `Fuso: ${business.timezone}. Horário: ${hours}. Serviços: ${services}.`,
+    ...clinicPt,
     "Usa as ferramentas para disponibilidade e marcações. Nunca inventes horários livres. Só confirma uma marcação depois de book_appointment devolver ok.",
     "Pede o nome do cliente antes de marcar. Se uma ferramenta falhar, diz-o em breve e oferece outra hora.",
   ].join(" ");
@@ -150,7 +167,14 @@ export function buildGrokSessionConfig(business: Business): Record<string, unkno
     voice: GROK_VOICE_ID,
     instructions: buildGrokInstructions(business),
     reasoning: { effort: "none" },
-    turn_detection: { type: "server_vad" },
+    // Default VAD threshold is 0.85 (very deaf to laptop mics). Lower it so the
+    // uplink is actually heard; keep a little padding so first syllables aren't clipped.
+    turn_detection: {
+      type: "server_vad",
+      threshold: 0.45,
+      silence_duration_ms: 700,
+      prefix_padding_ms: 400,
+    },
     tools: GROK_VOICE_TOOLS,
     audio: {
       input: {
