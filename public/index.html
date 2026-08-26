@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atende · Recepcionista de voz para o seu negócio</title>
+    <meta
+      name="description"
+      content="A Atende atende as chamadas do seu negócio por voz, marca as horas na agenda e transfere para si quando está livre. Para barbearias, salões, clínicas, estética, restaurantes e serviços. Número +351 incluído."
+    />
+    <link rel="stylesheet" href="/landing.css" />
+    <link rel="preload" as="image" href="/images/barbershop-hero.jpg" />
+  </head>
+  <body>
+    <header class="site-header" id="header">
+      <div class="header-inner">
+        <a class="logo" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4"/><path d="M8 6.5v11"/><path d="M12 3v18"/><path d="M16 6.5v11"/><path d="M20 10v4"/></svg></span> Atende</a>
+        <div class="nav">
+          <nav class="nav-links">
+            <a href="#problema">Porquê</a>
+            <a href="#como">Como funciona</a>
+            <a href="#exemplos">Exemplos</a>
+            <a href="#diferenca">Diferença</a>
+            <a href="#precos">Preços</a>
+            <a href="#faq">Perguntas</a>
+          </nav>
+          <div class="nav-actions">
+            <a class="btn btn-ghost btn-sm" href="/demo/barbearia-lisboa">Ouvir a demo</a>
+            <a class="btn btn-primary btn-sm" href="#" data-open-modal>Criar assistente</a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- HERO -->
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div>
+            <span class="eyebrow"><span class="tick"></span> Recepcionista de voz para negócios de marcações</span>
+            <h1 class="head">Está a atender um cliente.<br />O telefone <em>é atendido na mesma.</em></h1>
+            <p class="lede">
+              A Atende atende as chamadas do seu negócio com <strong>voz natural</strong>, marca na
+              agenda e passa-lhe a chamada quando estiver livre. Barbearias, salões, clínicas,
+              estética, restaurantes — com número <strong>+351</strong> próprio.
+            </p>
+            <div class="hero-cta">
+              <a href="#" class="btn btn-primary btn-lg" data-open-modal>Criar o meu assistente</a>
+              <a href="/demo/barbearia-lisboa" class="btn btn-ghost btn-lg">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                Ouvir a demo
+              </a>
+            </div>
+            <div class="trust">
+              <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> Número +351 incluído</span>
+              <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> Sem apps do operador</span>
+              <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> Sincroniza com o Google Calendar</span>
+            </div>
+          </div>
+
+          <!-- Voice call card -->
+          <div class="callcard-stage">
+            <div class="callcard">
+              <div class="cc-top">
+                <span class="cc-live"><span class="rec"></span> CHAMADA AO VIVO</span>
+                <span id="ccTimer">00:00</span>
+              </div>
+              <div class="cc-agent">
+                <div class="cc-avatar">S</div>
+                <div><div class="nm">Sofia</div><div class="rl">Assistente de voz</div></div>
+              </div>
+              <div class="waveform" id="wave" aria-hidden="true"></div>
+              <div class="caption">
+                <div class="spk" id="heroSpk">A atender…</div>
+                <div class="txt" id="heroTxt"></div>
+              </div>
+              <div class="cc-controls">
+                <button aria-label="Sem som"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 5 6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6"/></svg></button>
+                <button aria-label="Teclado"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="5" cy="5" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="19" cy="5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+                <button class="end" aria-label="Terminar"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15.5c-1.2 0-2.4-.2-3.5-.6-.35-.12-.75-.03-1 .24l-1.5 1.5a15 15 0 0 1-6.6-6.6l1.5-1.5c.27-.27.36-.66.24-1A11 11 0 0 1 9.5 4 1 1 0 0 0 8.5 3H5a1 1 0 0 0-1 1 17 17 0 0 0 17 17 1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- IMAGE BAND + STATS -->
+      <div class="image-band" style="background-image:url('/images/barbershop-hero.jpg')" data-reveal>
+        <div class="wrap">
+          <div class="kicker">Nunca fora de serviço</div>
+          <h2>Enquanto está ocupado a trabalhar, ninguém fica sem resposta.</h2>
+          <div class="band-stats">
+            <div><div class="n"><span data-count="24" data-suffix="/7">0</span></div><div class="l">A atender, mesmo fora de horas</div></div>
+            <div><div class="n"><span data-count="15">0</span><span class="u">s</span></div><div class="l">Para marcar numa chamada</div></div>
+            <div><div class="n"><span data-count="0">0</span></div><div class="l">Chamadas perdidas</div></div>
+            <div><div class="n"><span class="u">+351</span></div><div class="l">Número próprio, já no preço</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROBLEM / SOLUTION -->
+      <section class="block" id="problema">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="kicker">O problema</div>
+            <h2 class="title">Cada chamada não atendida é um cliente que vai para o concorrente.</h2>
+            <p class="lead">Ninguém consegue trabalhar e atender ao telefone ao mesmo tempo. Quem não é atendido raramente deixa recado — liga ao concorrente.</p>
+          </div>
+          <div class="compare">
+            <div class="col bad" data-reveal>
+              <h3><span class="tagdot"></span> Sem a Atende</h3>
+              <ul>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> O telefone toca enquanto atende um cliente e fica sem resposta.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> Chamadas fora de horas perdem-se para sempre.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> Trocar o número do operador dá trabalho e confusão.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> A agenda anda em papel, cabeça e mensagens soltas.</li>
+              </ul>
+            </div>
+            <div class="col good" data-reveal>
+              <h3><span class="tagdot"></span> Com a Atende</h3>
+              <ul>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Todas as chamadas atendidas por voz, em português.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Marca sozinha e confirma — a qualquer hora.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Um toque em "Disponível / Ocupado" transfere a chamada para si.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Tudo cai no Google Calendar do seu telemóvel.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HOW IT WORKS (flow) -->
+      <section class="block alt" id="como">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="kicker">Como funciona</div>
+            <h2 class="title">Da chamada à agenda, sem tocar no telefone.</h2>
+            <p class="lead">Um fluxo automático que corre em segundo plano enquanto continua a trabalhar.</p>
+          </div>
+          <div class="flow" data-reveal>
+            <div class="flow-node">
+              <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M15 3h6v6M14 10l7-7M20 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 .1 3.2 2 2 0 0 1 2 1h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L6 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.5 2.8.6A2 2 0 0 1 20 16.9z"/></svg></div>
+              <div class="st">Passo 01</div><h4>O cliente liga</h4><p>Para o seu número +351, a qualquer hora.</p>
+            </div>
+            <div class="flow-arrow"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+            <div class="flow-node">
+              <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2a4 4 0 0 0-4 4v5a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/></svg></div>
+              <div class="st">Passo 02</div><h4>A Sofia atende</h4><p>Percebe o pedido em linguagem natural.</p>
+            </div>
+            <div class="flow-arrow"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+            <div class="flow-node">
+              <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="16" cy="15" r="3"/><path d="m20 19-1.5-1.5"/></svg></div>
+              <div class="st">Passo 03</div><h4>Consulta a agenda</h4><p>Vê horas livres no Cal.com em tempo real.</p>
+            </div>
+            <div class="flow-arrow"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+            <div class="flow-node">
+              <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/></svg></div>
+              <div class="st">Passo 04</div><h4>Marca e confirma</h4><p>Sincroniza com o Google Calendar e avisa o cliente.</p>
+            </div>
+            <div class="flow-arrow"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+            <div class="flow-node">
+              <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h11l-3-3m3 3-3 3M20 17H9l3-3m-3 3 3 3"/></svg></div>
+              <div class="st">Passo 05</div><h4>Transfere se estiver livre</h4><p>Em "Disponível", a chamada passa para si.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONVERSATION EXAMPLES -->
+      <section class="block" id="exemplos">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="kicker">Exemplos reais</div>
+            <h2 class="title">Conversas que a Sofia resolve sozinha.</h2>
+            <p class="lead">Escolha um cenário e veja a chamada a decorrer, palavra a palavra.</p>
+          </div>
+          <div class="examples" data-reveal>
+            <div class="ex-tabs" id="exTabs">
+              <button class="ex-tab active" data-scenario="marcacao">
+                <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+                <span><span class="t">Marcar hora</span><br /><span class="d">Barbearia · corte + barba</span></span>
+              </button>
+              <button class="ex-tab" data-scenario="remarcar">
+                <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5"/></svg></span>
+                <span><span class="t">Remarcar</span><br /><span class="d">Clínica · mudar de dia</span></span>
+              </button>
+              <button class="ex-tab" data-scenario="fora">
+                <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+                <span><span class="t">Fora de horas</span><br /><span class="d">Restaurante · reserva ao domingo</span></span>
+              </button>
+              <button class="ex-tab" data-scenario="precos">
+                <span class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+                <span><span class="t">Preços e serviços</span><br /><span class="d">Salão · preços e marcação</span></span>
+              </button>
+            </div>
+            <div class="ex-panel">
+              <div class="ex-head">
+                <div class="who">
+                  <span class="cc-live"><span class="rec"></span></span>
+                  <span id="exTitle">Marcar hora · Barbearia do Zé</span>
+                </div>
+                <div class="mini-wave"><i style="animation-delay:0s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.45s"></i></div>
+              </div>
+              <div class="ex-body" id="exBody"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FEATURES -->
+      <section class="block alt">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="kicker">O que faz</div>
+            <h2 class="title">Um recepcionista que nunca falta.</h2>
+          </div>
+          <div class="features">
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2a4 4 0 0 0-4 4v5a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8"/></svg></div><h4>Voz natural, em português</h4><p>Percebe "queria corte e barba para sexta à tarde" — sem menus nem robôs.</p></div>
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/></svg></div><h4>Marca e confirma sozinha</h4><p>Conhece serviços, durações e horas livres. Evita sobreposições.</p></div>
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h11l-3-3m3 3-3 3M20 17H9l3-3m-3 3 3 3"/></svg></div><h4>Transfere para a pessoa certa</h4><p>Passa a chamada para o profissional livre — ou toma o recado.</p></div>
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><h4>24/7, também fora de horas</h4><p>Domingo à noite ou à hora de almoço, a marcação entra na mesma.</p></div>
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"/></svg></div><h4>Também por WhatsApp e SMS</h4><p>Confirmações e lembretes automáticos que reduzem as faltas.</p></div>
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 3v18h18M18 9l-5 5-3-3-4 4"/></svg></div><h4>Painel simples</h4><p>Marcações, recursos e serviços num backoffice leve. A agenda continua no Google.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DIFFERENTIATORS -->
+      <section class="block" id="diferenca">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="kicker">Porque somos diferentes</div>
+            <h2 class="title">Onde a concorrência complica, nós tratamos.</h2>
+            <p class="lead">A maioria obriga-o a reencaminhar chamadas com códigos do operador, a atualizar diretórios ou a tratar de papelada de portabilidade. Nós fazemos o trabalho por si.</p>
+          </div>
+          <div class="features">
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.5 2.8.6a2 2 0 0 1 1.8 2Z"/></svg></div><h4>O número, tratado por nós</h4><p>Provisionamos o +351 e ajudamos a publicá-lo no Google, Instagram e à porta. Os outros deixam essa tarefa consigo.</p></div>
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z"/></svg></div><h4>Feito para Portugal</h4><p>+351, voz em português europeu e dados na UE (RGPD). A maioria é pensada para os EUA e em inglês.</p></div>
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h11l-3-3m3 3-3 3M20 17H9l3-3m-3 3 3 3"/></svg></div><h4>Sem reencaminhamentos manuais</h4><p>O número é do assistente desde o dia 1. O botão "Disponível / Ocupado" substitui os códigos *72 do operador.</p></div>
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg></div><h4>Garantia de portabilidade</h4><p>O número é seu: se um dia sair, portamos gratuitamente para si. Sem lock-in.</p></div>
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5A2.5 2.5 0 0 1 12 8c1.4 0 2.5.8 2.5 2s-1.1 2-2.5 2-2.5.8-2.5 2 1.1 2 2.5 2a2.5 2.5 0 0 0 2.5-1.5"/></svg></div><h4>Número incluído, sem surpresas</h4><p>O custo do +351 está no preço do plano. Sem "créditos" vagos nem taxas escondidas.</p></div>
+            <div class="feature" data-reveal><div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg></div><h4>Adesão em minutos</h4><p>Tratamos da papelada regulatória (NIF, certidão, morada). Sem contratos de operador nem configurações SIP.</p></div>
+          </div>
+          <div class="guarantee" data-reveal>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+            <span><strong>Garantia de portabilidade.</strong> O número é sempre seu — se um dia sair, tratamos da portabilidade sem custos.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- USE CASES (photos) -->
+      <section class="block">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="kicker">Para quem é</div>
+            <h2 class="title">Feito para negócios que vivem de marcações.</h2>
+            <p class="lead">Barbearias, salões, clínicas, estética, restaurantes, oficinas — qualquer negócio onde o telefone toca enquanto se trabalha.</p>
+          </div>
+          <div class="usecases">
+            <div class="uc" data-reveal>
+              <div class="photo" style="background-image:url('/images/usecase-barbearia.jpg')">
+                <span class="badge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></span>
+              </div>
+              <div class="body"><h4>Barbearias</h4><p>Cortes, barba e coloração. Transferência para o barbeiro certo e agenda por cadeira.</p></div>
+            </div>
+            <div class="uc" data-reveal>
+              <div class="photo" style="background-image:url('/images/usecase-salao.jpg')">
+                <span class="badge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v20M5 8c0 3 3 4 7 4s7-1 7-4M5 8a7 7 0 0 1 14 0"/></svg></span>
+              </div>
+              <div class="body"><h4>Salões & estética</h4><p>Serviços mais longos, vários profissionais e lembretes que reduzem faltas.</p></div>
+            </div>
+            <div class="uc" data-reveal>
+              <div class="photo" style="background-image:url('/images/usecase-clinica.jpg')">
+                <span class="badge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg></span>
+              </div>
+              <div class="body"><h4>Clínicas & dentária</h4><p>Atendimento fora de horas e triagem de marcações. (Não presta aconselhamento médico.)</p></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ROI -->
+      <section class="block alt" id="calculo">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="kicker">Quanto poupa</div>
+            <h2 class="title">Faça as contas ao seu negócio.</h2>
+            <p class="lead">Escolha o tipo de negócio para partir de valores típicos — e ajuste ao seu caso.</p>
+          </div>
+          <div class="roi" data-reveal>
+            <div>
+              <label for="bizType">Tipo de negócio</label>
+              <div class="sub">Define valores de partida — pode ajustar tudo abaixo.</div>
+              <select id="bizType">
+                <option value="barbearia">Barbearia</option>
+                <option value="salao">Salão de cabeleireiro</option>
+                <option value="estetica">Estética / spa</option>
+                <option value="clinica">Clínica / dentária</option>
+                <option value="restaurante">Restaurante</option>
+                <option value="servicos">Oficina / serviços</option>
+                <option value="outro">Outro</option>
+              </select>
+              <label for="calls" style="margin-top:22px">Chamadas perdidas por semana</label>
+              <div class="sub">Toques sem resposta, fora de horas e ocupado.</div>
+              <input type="range" id="calls" min="2" max="60" value="12" />
+              <div class="val"><b id="callsVal">12</b> chamadas / semana</div>
+              <label for="ticket" style="margin-top:22px">Valor médio por cliente</label>
+              <div class="sub">Valor médio de um serviço/marcação.</div>
+              <input type="range" id="ticket" min="8" max="150" value="15" />
+              <div class="val"><b id="ticketVal">15€</b> por cliente</div>
+            </div>
+            <div class="result">
+              <div class="cap">Faturação potencial recuperada</div>
+              <div class="big"><span id="roiValue">0</span><span class="u">€</span><span style="font-size:20px;color:rgba(255,255,255,.6)">/mês</span></div>
+              <div class="foot" id="roiFoot"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRICING -->
+      <section class="block" id="precos">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="kicker">Preços</div>
+            <h2 class="title">Simples. Com o número já incluído.</h2>
+            <p class="lead">Subscrição mensal com minutos incluídos e sem "créditos" vagos. Cancela quando quiser.</p>
+          </div>
+          <div class="plans" id="plans"></div>
+          <p class="setup-note" id="setupNote"></p>
+        </div>
+      </section>
+
+      <!-- TESTIMONIALS -->
+      <section class="block alt">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="kicker">Quem já usa</div>
+            <h2 class="title">Menos telefone, mais tesoura.</h2>
+          </div>
+          <div class="quotes">
+            <div class="quote" data-reveal><div class="stars">★★★★★</div><p>"Deixei de parar o corte para atender. As marcações entram sozinhas e ao domingo já apanho gente que antes perdia."</p><div class="who"><span class="av">R</span><div><div class="n">Rui Marques</div><div class="r">Barbearia RM · Porto</div></div></div></div>
+            <div class="quote" data-reveal><div class="stars">★★★★★</div><p>"Puseram o número novo no Google e no Instagram. A agenda aparece no telemóvel e a equipa vê tudo na hora."</p><div class="who"><span class="av">S</span><div><div class="n">Sara Nunes</div><div class="r">Salão Aurora · Lisboa</div></div></div></div>
+            <div class="quote" data-reveal><div class="stars">★★★★★</div><p>"O botão 'A cortar' é genial. Quando estou livre a chamada vem para mim; quando não, marca ela e não perco ninguém."</p><div class="who"><span class="av">T</span><div><div class="n">Tiago Fonseca</div><div class="r">The Fade Room · Braga</div></div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section class="block" id="faq">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="kicker">Perguntas frequentes</div>
+            <h2 class="title">Tudo o que precisa de saber.</h2>
+          </div>
+          <div class="faq" id="faqList"></div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="block">
+        <div class="wrap">
+          <div class="cta-band" style="background-image:url('/images/usecase-barbearia.jpg')" data-reveal>
+            <h2>Pronto para não perder mais nenhum cliente?</h2>
+            <p>Crie o seu assistente em minutos e experimente a demo com voz. Sem cartão para começar.</p>
+            <a href="#" class="btn btn-primary btn-lg" data-open-modal>Criar o meu assistente</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap footer-inner">
+        <div class="footer-col">
+          <div class="logo" style="font-size:18px"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4"/><path d="M8 6.5v11"/><path d="M12 3v18"/><path d="M16 6.5v11"/><path d="M20 10v4"/></svg></span> Atende</div>
+          <div>Assistente de voz para PME · Portugal · <span id="year"></span></div>
+          <div style="color:var(--muted)">Marca de trabalho do produto Voice Agents da Transformative.</div>
+        </div>
+        <div class="footer-col">
+          <a href="/termos">Termos de Serviço</a>
+          <a href="/privacidade">Política de Privacidade</a>
+          <a href="/dpa">Acordo de Tratamento de Dados</a>
+          <a href="https://www.livroreclamacoes.pt" target="_blank" rel="noopener">Livro de Reclamações</a>
+        </div>
+      </div>
+      <div class="wrap footer-legal" style="margin-top:22px">
+        Serviço dirigido a profissionais e empresas. Em conformidade com o RGPD e a Lei n.º 58/2019.
+        Litígios de consumo (Lei n.º 144/2015): entidades de Resolução Alternativa de Litígios em
+        <a href="https://www.consumidor.gov.pt" target="_blank" rel="noopener">consumidor.gov.pt</a>
+        (ex.: <a href="https://www.cniacc.pt" target="_blank" rel="noopener">CNIACC</a>).
+      </div>
+    </footer>
+
+    <div class="modal-backdrop" id="onboardModal">
+      <div class="modal">
+        <span class="close-x" id="closeOnboard">×</span>
+        <h3>Criar o meu assistente</h3>
+        <p class="hint">Configuração inicial — ajusta tudo depois no backoffice.</p>
+        <form id="onboardForm">
+          <label for="name">Nome do negócio</label>
+          <input id="name" name="name" placeholder="Barbearia do Zé" required />
+          <div class="row">
+            <div><label for="useCase">Tipo</label>
+              <select id="useCase" name="useCase"><option value="barbearia">Barbearia</option><option value="salao">Salão</option><option value="clinica">Clínica</option><option value="restaurante">Restaurante</option><option value="outro">Outro</option></select>
+            </div>
+            <div><label for="plan">Plano</label>
+              <select id="plan" name="planId"><option value="base">Base</option><option value="pro" selected>Pro</option><option value="studio">Studio</option></select>
+            </div>
+          </div>
+          <div class="row">
+            <div><label for="agentName">Nome do assistente</label><input id="agentName" name="agentName" value="Sofia" /></div>
+            <div><label for="agentGender">Voz</label>
+              <select id="agentGender" name="agentGender"><option value="feminino">Feminina</option><option value="masculino">Masculina</option><option value="neutro">Neutra</option></select>
+            </div>
+          </div>
+          <label for="locale">Idioma</label>
+          <select id="locale" name="locale"><option value="pt" selected>Português</option><option value="en">Inglês</option></select>
+          <p class="hint" style="margin-top:16px; margin-bottom:0;">Ao criar, aceita os <a href="/termos" target="_blank" style="color:var(--accent)">Termos de Serviço</a> e a <a href="/privacidade" target="_blank" style="color:var(--accent)">Política de Privacidade</a>.</p>
+          <button type="submit" class="btn btn-primary">Criar assistente →</button>
+        </form>
+      </div>
+    </div>
+
+    <script src="/landing.js"></script>
+  </body>
+</html>
