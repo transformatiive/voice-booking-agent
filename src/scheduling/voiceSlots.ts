@@ -99,6 +99,23 @@ function hasClockTime(raw: string): boolean {
   return /t\d{2}:\d{2}/i.test(raw) || /\d{1,2}:\d{2}/.test(raw) || /\b\d{1,2}h(?:\d{2})?\b/i.test(raw);
 }
 
+function extractPtClock(text: string): { hours: number; minutes: number } | null {
+  const match =
+    text.match(/(?:^|\s)(?:às|as|at)\s*(\d{1,2})(?:h|:)(\d{2})(?!\d)/i) ||
+    text.match(/(?:^|\s)(?:às|as|at)\s*(\d{1,2})h(?!\d)/i) ||
+    text.match(/(?:^|\s)(\d{1,2})h(\d{2})(?!\d)/i) ||
+    text.match(/(?:^|\s)(\d{1,2}):(\d{2})(?!\d)/);
+  if (!match) {
+    return null;
+  }
+  const hours = Number(match[1]);
+  const minutes = match[2] ? Number(match[2]) : 0;
+  if (hours > 23 || minutes > 59) {
+    return null;
+  }
+  return { hours, minutes };
+}
+
 export function parseVoiceDate(raw: unknown, locale: Locale, now: Date): { date: Date; specificTime: boolean } {
   if (raw === undefined || raw === null || String(raw).trim() === "") {
     return { date: now, specificTime: false };
@@ -112,8 +129,22 @@ export function parseVoiceDate(raw: unknown, locale: Locale, now: Date): { date:
   const results = parser.parse(text, now, { forwardDate: true });
   if (results.length > 0) {
     const parsed = results[0].start.date();
-    const specificTime = results[0].start.isCertain("hour");
+    let specificTime = results[0].start.isCertain("hour");
+    const clock = extractPtClock(text);
+    if (clock) {
+      parsed.setHours(clock.hours, clock.minutes, 0, 0);
+      specificTime = true;
+    }
     return { date: parsed, specificTime };
+  }
+  const clockOnly = extractPtClock(text);
+  if (clockOnly) {
+    const dated = new Date(now);
+    dated.setHours(clockOnly.hours, clockOnly.minutes, 0, 0);
+    if (dated.getTime() <= now.getTime()) {
+      dated.setDate(dated.getDate() + 1);
+    }
+    return { date: dated, specificTime: true };
   }
   if (!Number.isNaN(iso.getTime())) {
     return { date: iso, specificTime: hasClockTime(text) };
@@ -155,26 +186,30 @@ export function collectOpenSlots(
   bookings: Booking[],
   now: Date,
   limit = VOICE_SLOT_LIMIT,
+  preferNear: Date | null = null,
 ): Date[] {
-  const slots: Date[] = [];
+  const gathered: Date[] = [];
   const cursor = new Date(Number.isNaN(around.getTime()) ? now : around);
   cursor.setHours(0, 0, 0, 0);
-  for (let day = 0; day < LOOKAHEAD_DAYS && slots.length < limit; day += 1) {
+  const want = preferNear ? Math.max(8, limit) : limit;
+  for (let day = 0; day < LOOKAHEAD_DAYS && gathered.length < want; day += 1) {
     const dayDate = new Date(cursor);
     dayDate.setDate(cursor.getDate() + day);
     for (const start of suggestSlots(business, service, dayDate, bookings, now, 20)) {
       if (start.getTime() >= now.getTime()) {
-        slots.push(start);
-        if (slots.length >= limit) {
-          break;
-        }
+        gathered.push(start);
       }
     }
   }
-  if (slots.length > 0) {
-    return slots.slice(0, limit);
+  if (gathered.length === 0) {
+    return syntheticSlots(now, limit);
   }
-  return syntheticSlots(now, limit);
+  if (preferNear) {
+    return [...gathered]
+      .sort((a, b) => Math.abs(a.getTime() - preferNear.getTime()) - Math.abs(b.getTime() - preferNear.getTime()))
+      .slice(0, limit);
+  }
+  return gathered.slice(0, limit);
 }
 
 /** Stable ~35% so demos sometimes (not always) treat a requested time as taken. */
@@ -215,10 +250,10 @@ export function buildGetSlotsResult(
     const availability = checkAvailability(business, service, rounded, bookings, now);
     const seed = `${business.slug}:${service.id}:${rounded.toISOString()}`;
     const pretendTaken = isVoiceDemoSlug(business.slug) && shouldSimulateTaken(seed);
+    const nearby = collectOpenSlots(business, service, rounded, bookings, now, VOICE_SLOT_LIMIT + 2, rounded);
     if (!availability.ok || pretendTaken) {
       taken = true;
       requested = rounded;
-      const nearby = collectOpenSlots(business, service, rounded, bookings, now, VOICE_SLOT_LIMIT + 2);
       alternative = nearestOther(nearby, rounded) ?? nearby[0] ?? collected[0] ?? null;
       offers = nearby.filter((s) => s.getTime() !== rounded.getTime()).slice(0, VOICE_SLOT_LIMIT);
       const alt = alternative;
@@ -226,7 +261,7 @@ export function buildGetSlotsResult(
         offers = [alt, ...offers].slice(0, VOICE_SLOT_LIMIT);
       }
     } else if (availability.ok) {
-      offers = [rounded, ...collected.filter((s) => s.getTime() !== rounded.getTime())].slice(0, VOICE_SLOT_LIMIT);
+      offers = [rounded, ...nearby.filter((s) => s.getTime() !== rounded.getTime())].slice(0, VOICE_SLOT_LIMIT);
     }
   }
 
@@ -242,7 +277,7 @@ export function buildGetSlotsResult(
   const message = taken
     ? L === "en"
       ? `That time is taken. I can do ${spokenAlt?.speak ?? "a nearby slot"} instead.`
-      : `Essa hora está ocupada. Posso às ${spokenAlt?.speak ?? "outra hora próxima"}.`
+      : `Essa hora está ocupada. Posso ${spokenAlt?.speak ?? "outra hora próxima"}.`
     : L === "en"
       ? `Available: ${spokenOffers.map((o) => o.speak).join("; ")}.`
       : `Tenho: ${spokenOffers.map((o) => o.speak).join("; ")}.`;

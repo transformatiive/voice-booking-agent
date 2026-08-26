@@ -39,9 +39,11 @@ describe("voice demo slots", () => {
     expect(timed.specificTime).toBe(true);
     expect(timed.date.getHours()).toBe(15);
 
-    const natural = parseVoiceDate("amanhã", "pt", NOW);
+    const natural = parseVoiceDate("amanhã às 15h", "pt", NOW);
     expect(Number.isNaN(natural.date.getTime())).toBe(false);
     expect(natural.date.getDate()).toBe(27);
+    expect(natural.specificTime).toBe(true);
+    expect(natural.date.getHours()).toBe(15);
 
     const garbage = parseVoiceDate("xyz-not-a-date", "pt", NOW);
     expect(garbage.date.getTime()).toBe(NOW.getTime());
@@ -104,8 +106,13 @@ describe("voice demo slots", () => {
     if (result.taken) {
       expect(result.alternative?.start).toBeTruthy();
       expect(result.alternative?.speak).toMatch(/às/);
+      const altHour = new Date(result.alternative!.start).getHours();
+      expect(altHour).toBeGreaterThanOrEqual(13);
+      expect(altHour).toBeLessThanOrEqual(16);
     } else {
       expect(result.offers[0].start).toBeTruthy();
+      const firstHour = new Date(result.offers[0].start).getHours();
+      expect(firstHour).toBe(15);
     }
   });
 
