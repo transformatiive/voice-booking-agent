@@ -56,20 +56,38 @@ app.get("/api/plans", (_req, res) => {
 // ---- Onboarding ----
 
 app.post("/api/onboard", (req: Request, res: Response) => {
-  const { name, useCase, locale, agentName, agentGender, planId } = req.body ?? {};
+  const { name, useCase, locale, agentName, agentGender, planId, contactEmail, contactPhone, numberPreference } =
+    req.body ?? {};
   if (typeof name !== "string" || name.trim() === "") {
     res.status(400).json({ error: "name_required" });
     return;
   }
   const business = store.createBusiness({
     name: name.trim(),
-    useCase: (isUseCase(useCase) ? useCase : "barbearia"),
+    useCase: isUseCase(useCase) ? useCase : "barbearia",
     locale: locale === "en" ? "en" : "pt",
-    agentName: typeof agentName === "string" ? agentName.trim() : "Sofia",
+    agentName: typeof agentName === "string" && agentName.trim() ? agentName.trim() : "Sofia",
     agentGender: isGender(agentGender) ? agentGender : "feminino",
     planId: isPlan(planId) ? planId : "base",
+    contactEmail: typeof contactEmail === "string" ? contactEmail.trim() || null : null,
+    contactPhone: typeof contactPhone === "string" ? contactPhone.trim() || null : null,
+    numberPreference: numberPreference === "port" ? "port" : "new",
+    status: "pending",
   });
   res.json({ slug: business.slug, id: business.id });
+});
+
+// Simulate completion of number + SIP provisioning and unlock the backoffice.
+// (In production this transitions when ops/automation finishes provisioning.)
+app.post("/api/business/:slug/activate", async (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  if (!business.number) {
+    await telephony.provisionForBusiness(business, "mobile");
+  }
+  business.status = "active";
+  store.saveBusiness(business);
+  res.json({ business: publicBusiness(business) });
 });
 
 // ---- Backoffice data + config ----
@@ -274,6 +292,8 @@ function seedDemoBusiness(store: Store): void {
     agentName: "Sofia",
     agentGender: "feminino",
     planId: "pro",
+    status: "active",
+    contactEmail: "geral@barbearialisboa.pt",
   });
   demo.resources = [
     { id: demo.resources[0].id, name: "João", transferNumber: "+351910000000", available: true, calUserId: null },
