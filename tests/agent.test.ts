@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConversationManager } from "../src/agent/conversation.js";
+import { ConversationManager, greeting } from "../src/agent/conversation.js";
 import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
 import { parseMessage } from "../src/agent/nlu.js";
 import { tempStore } from "./helpers.js";
@@ -78,6 +78,15 @@ describe("ConversationManager (PT)", () => {
     expect(store.listBookings(business.id)).toHaveLength(0);
   });
 
+  it("reset drops an in-progress booking so a new call starts fresh", async () => {
+    const { agent, business } = makeAgent();
+    await agent.handle(business, "s-reset", "Quero marcar um corte de cabelo");
+    agent.reset("s-reset");
+    const reply = await agent.handle(business, "s-reset", "amanhã às 15:00");
+    expect(reply.booking).toBeUndefined();
+    expect(reply.reply.toLowerCase()).toMatch(/serviço|pretende/);
+  });
+
   it("help copy stays general, not barber-specific", async () => {
     const { agent, business } = makeAgent();
     const reply = await agent.handle(business, "s-help", "ajuda");
@@ -93,5 +102,10 @@ describe("ConversationManager (PT)", () => {
     const reply = await agent.handle(business, "s3", "cancelar o corte");
     expect(reply.reply.toLowerCase()).toContain("cancelei");
     expect(store.listBookings(business.id)).toHaveLength(0);
+  });
+
+  it("keeps barbearia-specific greeting for a barbearia tenant", () => {
+    const { business } = makeAgent();
+    expect(greeting(business)).toContain("ida à barbearia");
   });
 });
