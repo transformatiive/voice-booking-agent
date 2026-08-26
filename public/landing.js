@@ -111,6 +111,8 @@ const FAQ = [
   ["Como é que a agenda funciona?", "O agendamento assenta no Cal.com com sincronização para o Google Calendar. Na prática, a sua agenda é a app Google Calendar do telemóvel — sem backoffice complicado."],
   ["E quando estou livre e quero atender?", "Tem um botão \"Disponível / A cortar\". Em \"Disponível\", a chamada é transferida para o seu telemóvel; em \"A cortar\", a Atende marca por si."],
   ["O número está mesmo incluído no preço?", "Sim. O custo do número +351 já está no valor do plano — sem taxas escondidas nem \"créditos\"."],
+  ["Em nome de quem fica o número? E se eu quiser sair?", "O número é aprovisionado através da nossa operadora, com a sua empresa registada como utilizador (como a lei portuguesa exige para números nacionais). Na prática, o número é seu: temos uma garantia de portabilidade — se decidir sair, portamos o número para si, sem custos. Sem lock-in."],
+  ["Tenho de tratar de papelada para ter o número?", "Quase nada. Precisamos apenas do NIF, morada e um comprovativo (e, para alguns números, a certidão de registo). Tratamos de todo o registo regulatório junto da operadora por si."],
   ["Posso cancelar quando quiser?", "Sim, a subscrição é mensal e cancela quando quiser, a partir do painel de faturação."],
 ];
 document.getElementById("faqList").innerHTML = FAQ.map(([q, a]) => `
