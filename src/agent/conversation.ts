@@ -123,8 +123,8 @@ export class ConversationManager {
         return {
           reply:
             L === "pt"
-              ? `Diga-me o que pretende marcar e quando, por exemplo: "Marcar corte amanhã às 15h". Também pode perguntar pelos serviços ou pela disponibilidade.`
-              : `Tell me what you'd like to book and when, e.g. "Book a haircut tomorrow at 3pm". You can also ask about services or availability.`,
+              ? `Diga-me o que pretende marcar e quando, por exemplo: "Marcar amanhã às 15h". Também pode perguntar pelos serviços ou pela disponibilidade.`
+              : `Tell me what you'd like to book and when, e.g. "Book tomorrow at 3pm". You can also ask about services or availability.`,
         };
       case "list_services":
         return {

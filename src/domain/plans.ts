@@ -30,7 +30,7 @@ export const PLANS: Record<PlanId, Plan> = {
       "1 número +351 incluído",
       "200 minutos de atendimento incluídos",
       "Agendamento por voz com sincronização Cal.com + Google Calendar",
-      "Transferência de chamada para o telemóvel do barbeiro",
+      "Transferência de chamada para o seu telemóvel",
       "Suporte por email",
     ],
   },
@@ -44,7 +44,7 @@ export const PLANS: Record<PlanId, Plan> = {
     features: [
       "Tudo do Base",
       "600 minutos incluídos",
-      "Até 3 recursos (barbeiros/cadeiras)",
+      "Até 3 recursos (profissionais/espaços)",
       "Lembretes automáticos e reagendamento",
       "Relatórios de chamadas e reservas",
     ],

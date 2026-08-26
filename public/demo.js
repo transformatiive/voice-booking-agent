@@ -11,10 +11,23 @@ const mic = document.getElementById("mic");
 const statusDot = document.getElementById("statusDot");
 const statusText = document.getElementById("statusText");
 
-const HINTS = {
-  pt: ["Marcar corte + barba amanhã às 15h", "Que serviços têm?", "Sexta de manhã está livre?", "As minhas marcações"],
-  en: ["Book a haircut tomorrow at 3pm", "What services do you offer?", "Is Friday morning free?", "Show my appointments"],
-};
+function demoHints(locale, services) {
+  const first = services?.[0]?.name;
+  if (locale === "en") {
+    return [
+      first ? `Book ${first} tomorrow at 3pm` : "Book tomorrow at 3pm",
+      "What services do you offer?",
+      "Is Friday morning free?",
+      "Show my appointments",
+    ];
+  }
+  return [
+    first ? `Marcar ${first} amanhã às 15h` : "Marcar amanhã às 15h",
+    "Que serviços têm?",
+    "Sexta de manhã está livre?",
+    "As minhas marcações",
+  ];
+}
 
 function addMessage(role, text) {
   const el = document.createElement("div");
@@ -110,7 +123,7 @@ async function init() {
     rec_lang_update();
     statusDot.classList.add("ok");
     statusText.textContent = `${b.agentName} online`;
-    const hints = HINTS[locale] || HINTS.pt;
+    const hints = demoHints(locale, b.services);
     document.getElementById("hints").innerHTML = hints.map((h) => `<li>“${h}”</li>`).join("");
     const g = await fetch(`/api/business/${slug}/greeting`).then((r) => r.json());
     addMessage("agent", g.reply);

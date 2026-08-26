@@ -78,6 +78,13 @@ describe("ConversationManager (PT)", () => {
     expect(store.listBookings(business.id)).toHaveLength(0);
   });
 
+  it("help copy stays general, not barber-specific", async () => {
+    const { agent, business } = makeAgent();
+    const reply = await agent.handle(business, "s-help", "ajuda");
+    expect(reply.reply).toContain("Marcar amanhã às 15h");
+    expect(reply.reply).not.toMatch(/corte|barbeiro|haircut/i);
+  });
+
   it("cancels an existing booking", async () => {
     const { store, business, agent } = makeAgent();
     await agent.handle(business, "s3", "marcar corte amanhã às 10:00 em nome de Rui");

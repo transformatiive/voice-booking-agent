@@ -154,9 +154,9 @@ updateRoi();
 /* ---------- FAQ ---------- */
 const FAQ = [
   ["Preciso de trocar de operador ou instalar alguma app?", "Não. Damos-lhe um número +351 novo que passa a publicar (Google, Instagram, à porta). O seu telemóvel pessoal continua pessoal. Se quiser manter o número atual, tratamos da portabilidade."],
-  ["A voz soa a robô?", "Não. A Atende usa voz natural e percebe linguagem do dia-a-dia — \"corte e barba para sábado de manhã\" — sem menus de \"prima 1\"."],
+  ["A voz soa a robô?", "Não. A Atende usa voz natural e percebe linguagem do dia-a-dia — \"queria marcar para sábado de manhã\" — sem menus de \"prima 1\"."],
   ["Como é que a agenda funciona?", "O agendamento assenta no Cal.com com sincronização para o Google Calendar. Na prática, a sua agenda é a app Google Calendar do telemóvel — sem backoffice complicado."],
-  ["E quando estou livre e quero atender?", "Tem um botão \"Disponível / A cortar\". Em \"Disponível\", a chamada é transferida para o seu telemóvel; em \"A cortar\", a Atende marca por si."],
+  ["E quando estou livre e quero atender?", "Tem um botão \"Disponível / Ocupado\". Em \"Disponível\", a chamada é transferida para o seu telemóvel; em \"Ocupado\", a Atende marca por si."],
   ["O número está mesmo incluído no preço?", "Sim. O custo do número +351 já está no valor do plano — sem taxas escondidas nem \"créditos\"."],
   ["Em nome de quem fica o número? E se eu quiser sair?", "O número é aprovisionado através da nossa operadora, com a sua empresa registada como utilizador (como a lei portuguesa exige para números nacionais). Na prática, o número é seu: temos uma garantia de portabilidade — se decidir sair, portamos o número para si, sem custos. Sem lock-in."],
   ["Tenho de tratar de papelada para ter o número?", "Quase nada. Precisamos apenas do NIF, morada e um comprovativo (e, para alguns números, a certidão de registo). Tratamos de todo o registo regulatório junto da operadora por si."],
