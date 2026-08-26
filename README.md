@@ -59,8 +59,8 @@ npm run dev            # http://localhost:3000
 ```
 
 - Landing: `/`
-- Backoffice: `/app/:slug` (a demo `barbearia-lisboa` is seeded)
-- Voice demo: `/demo/:slug` (in-browser **Grok Live 2** speech-to-speech call — not a text chat)
+- Backoffice: `/app/:slug` (demo tenants: `clinica-central` on the homepage, `barbearia-lisboa` still at `/demo`)
+- Voice demo: homepage card at `/` (**Grok Live 2** speech-to-speech). `/demo/:slug` remains as a URL.
 
 Copy `.env.example` and fill only the integrations you want to activate.
 

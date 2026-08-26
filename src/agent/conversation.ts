@@ -393,8 +393,17 @@ function firstAvailableResource(business: Business): string | null {
 
 export function greeting(business: Business): string {
   const L = business.locale;
+  const agent = business.agentName || (L === "en" ? "the assistant" : "o assistente");
+  const offered = servicesSentence(business);
   if (L === "pt") {
-    return `Olá! Sou ${business.agentName || "o assistente"} da ${business.name}. Posso marcar a sua ${business.useCase === "barbearia" ? "ida à barbearia" : "marcação"}. Temos: ${servicesSentence(business)}. O que pretende?`;
+    if (business.useCase === "clinica") {
+      return `Olá! Sou ${agent} da ${business.name}. Posso marcar a sua consulta. Temos: ${offered}. Que especialidade pretende?`;
+    }
+    const what = business.useCase === "barbearia" ? "ida à barbearia" : "marcação";
+    return `Olá! Sou ${agent} da ${business.name}. Posso marcar a sua ${what}. Temos: ${offered}. O que pretende?`;
   }
-  return `Hi! I'm ${business.agentName || "the assistant"} at ${business.name}. I can book your appointment. We offer: ${servicesSentence(business)}. What would you like?`;
+  if (business.useCase === "clinica") {
+    return `Hi! I'm ${agent} at ${business.name}. I can book your consultation. We offer: ${offered}. Which specialty would you like?`;
+  }
+  return `Hi! I'm ${agent} at ${business.name}. I can book your appointment. We offer: ${offered}. What would you like?`;
 }

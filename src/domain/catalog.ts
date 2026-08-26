@@ -22,9 +22,10 @@ const SERVICE_SEEDS: Record<UseCase, ServiceSeed[]> = {
     { name: "Manicure", durationMinutes: 45, priceCents: 1500 },
   ],
   clinica: [
-    { name: "Consulta", durationMinutes: 30, priceCents: null },
-    { name: "Limpeza dentária", durationMinutes: 45, priceCents: null },
-    { name: "Avaliação", durationMinutes: 20, priceCents: null },
+    { name: "Clínica geral", durationMinutes: 30, priceCents: null },
+    { name: "Dermatologia", durationMinutes: 30, priceCents: null },
+    { name: "Pediatria", durationMinutes: 30, priceCents: null },
+    { name: "Medicina dentária", durationMinutes: 45, priceCents: null },
   ],
   restaurante: [
     { name: "Reserva de mesa (2 pessoas)", durationMinutes: 90, priceCents: null },
