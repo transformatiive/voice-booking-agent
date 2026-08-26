@@ -230,6 +230,8 @@ app.use(express.static(publicDir));
 
 app.get("/app/:slug", (_req, res) => res.sendFile(join(publicDir, "admin.html")));
 app.get("/demo/:slug", (_req, res) => res.sendFile(join(publicDir, "demo.html")));
+app.get(["/privacidade", "/privacy"], (_req, res) => res.sendFile(join(publicDir, "privacidade.html")));
+app.get(["/termos", "/terms"], (_req, res) => res.sendFile(join(publicDir, "termos.html")));
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) {
