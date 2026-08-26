@@ -249,11 +249,22 @@ app.post("/api/business/:slug/realtime/tool", async (req, res) => {
     });
     return;
   }
-  const result = await handleVoiceFunction(business, store, scheduler, {
-    name: String(req.body?.name ?? ""),
-    arguments: parseToolArguments(req.body?.arguments),
-  });
-  res.json(result);
+  try {
+    const result = await handleVoiceFunction(business, store, scheduler, {
+      name: String(req.body?.name ?? ""),
+      arguments: parseToolArguments(req.body?.arguments),
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("[realtime/tool]", err instanceof Error ? err.message : err);
+    res.json({
+      error: "tool_failed",
+      instruction:
+        business.locale === "en"
+          ? "Keep talking. Offer a nearby time and ask if it works."
+          : "Continua a falar. Oferece uma hora próxima e pergunta se serve.",
+    });
+  }
 });
 
 app.post("/voice/incoming/:slug", (req, res) => {
@@ -280,6 +291,15 @@ app.post("/voice/functions/:slug", async (req, res) => {
   const result = await handleVoiceFunction(business, store, scheduler, {
     name: String(req.body?.name ?? ""),
     arguments: (req.body?.arguments as Record<string, unknown>) ?? {},
+  }).catch((err: unknown) => {
+    console.error("[voice/functions]", err instanceof Error ? err.message : err);
+    return {
+      error: "tool_failed",
+      instruction:
+        business.locale === "en"
+          ? "Keep talking. Offer a nearby time and ask if it works."
+          : "Continua a falar. Oferece uma hora próxima e pergunta se serve.",
+    };
   });
   res.json(result);
 });

@@ -1,7 +1,18 @@
-import type { Business, Service } from "../domain/types.js";
+import type { Business } from "../domain/types.js";
 import type { Store } from "../store/store.js";
-import type { Scheduler } from "../scheduling/scheduler.js";
-import { suggestSlots } from "../scheduling/availability.js";
+import type { BookResult, Scheduler } from "../scheduling/scheduler.js";
+import { InMemoryScheduler } from "../scheduling/inMemoryScheduler.js";
+import {
+  bookingSpeak,
+  buildGetSlotsResult,
+  collectOpenSlots,
+  findServiceByName,
+  speakSlot,
+} from "../scheduling/voiceSlots.js";
+import { isVoiceDemoSlug } from "../store/seed.js";
+
+/** Never let a Cal.com (or other) hop block the voice tool loop. */
+export const VOICE_TOOL_TIMEOUT_MS = 1_500;
 
 function escapeXml(value: string): string {
   return value
@@ -12,6 +23,33 @@ function escapeXml(value: string): string {
 }
 
 const VOICE_LANG: Record<string, string> = { pt: "pt-PT", en: "en-US" };
+
+function firstResourceId(business: Business): string | null {
+  return business.resources.find((r) => r.available)?.id ?? business.resources[0]?.id ?? null;
+}
+
+function memoryScheduler(store: Store, scheduler: Scheduler, now: Date): Scheduler {
+  if (scheduler.kind === "memory") {
+    return scheduler;
+  }
+  return new InMemoryScheduler(store, () => now);
+}
+
+function raceTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
 
 /**
  * Inbound-call TeXML (Telnyx). Implements the core "Disponível / A cortar"
@@ -50,15 +88,6 @@ export function buildIncomingTeXML(business: Business): string {
     `  <Record maxLength="60" />`,
     `</Response>`,
   ].join("\n");
-}
-
-function findServiceByName(business: Business, name: string): Service | null {
-  const n = name.toLowerCase();
-  return (
-    business.services.find((s) => s.name.toLowerCase() === n) ??
-    business.services.find((s) => s.name.toLowerCase().includes(n) || n.includes(s.name.toLowerCase())) ??
-    null
-  );
 }
 
 export const VOICE_FUNCTION_NAMES = [
@@ -110,38 +139,85 @@ export async function handleVoiceFunction(
       const serviceName = String(call.arguments.service ?? "");
       const service = findServiceByName(business, serviceName);
       if (!service) {
-        return { error: "unknown_service", available: business.services.map((s) => s.name) };
+        return {
+          error: "unknown_service",
+          available: business.services.map((s) => s.name),
+          instruction:
+            business.locale === "en"
+              ? "Ask which service they want, then call get_slots again. Keep talking."
+              : "Pergunta a especialidade ou serviço e chama get_slots outra vez. Continua a falar.",
+        };
       }
-      const dateArg = call.arguments.date ? new Date(String(call.arguments.date)) : now;
       const bookings = store.listBookings(business.id);
-      const slots = suggestSlots(business, service, dateArg, bookings, now, 6);
-      return { service: service.name, slots: slots.map((s) => s.toISOString()) };
+      return { ...buildGetSlotsResult(business, service, call.arguments.date, bookings, now) };
     }
 
     case "book_appointment": {
       const serviceName = String(call.arguments.service ?? "");
       const service = findServiceByName(business, serviceName);
       if (!service) {
-        return { error: "unknown_service" };
+        return {
+          error: "unknown_service",
+          available: business.services.map((s) => s.name),
+          instruction:
+            business.locale === "en"
+              ? "Ask which service. Do not go silent."
+              : "Pergunta o serviço. Não fiques em silêncio.",
+        };
       }
       const startIso = String(call.arguments.start ?? "");
       const start = new Date(startIso);
       if (Number.isNaN(start.getTime())) {
-        return { error: "invalid_start" };
+        return { error: "invalid_start", instruction: "Ask for a time from the last get_slots offers." };
       }
-      const result = await scheduler.book({
+      const customerName = call.arguments.customerName ? String(call.arguments.customerName) : null;
+      const customerPhone = call.arguments.customerPhone ? String(call.arguments.customerPhone) : null;
+      const input = {
         business,
         service,
         start,
-        resourceId: business.resources.find((r) => r.available)?.id ?? null,
-        customerName: call.arguments.customerName ? String(call.arguments.customerName) : null,
-        customerPhone: call.arguments.customerPhone ? String(call.arguments.customerPhone) : null,
-        source: "voice",
-      });
-      if (!result.ok) {
-        return { ok: false, reason: result.reason };
+        resourceId: firstResourceId(business),
+        customerName,
+        customerPhone,
+        source: "voice" as const,
+      };
+      const local = memoryScheduler(store, scheduler, now);
+      const useLocal = isVoiceDemoSlug(business.slug) || scheduler.kind === "memory";
+      let result: BookResult = useLocal
+        ? await local.book(input)
+        : await raceTimeout(scheduler.book(input), VOICE_TOOL_TIMEOUT_MS, { ok: false, reason: "error" });
+      if (!result.ok && result.reason === "error") {
+        result = await local.book(input);
       }
-      return { ok: true, bookingId: result.booking.id, start: result.booking.start };
+      if (!result.ok) {
+        const nearby = collectOpenSlots(business, service, start, store.listBookings(business.id), now);
+        const alt = nearby[0] ?? null;
+        return {
+          ok: false,
+          reason: result.reason,
+          alternative: alt
+            ? { start: alt.toISOString(), speak: speakSlot(alt, business.locale, business.timezone) }
+            : null,
+          slots: nearby.map((s) => s.toISOString()),
+          instruction:
+            business.locale === "en"
+              ? "That slot did not book. Offer the alternative out loud and keep talking."
+              : "Essa hora não ficou. Propõe a alternativa em voz alta e continua a falar.",
+        };
+      }
+      return {
+        ok: true,
+        bookingId: result.booking.id,
+        start: result.booking.start,
+        speak: bookingSpeak(result.booking.start, result.booking.serviceName, business),
+        smsConfirmation: true,
+        needName: !customerName,
+        needPhone: !customerPhone,
+        instruction:
+          business.locale === "en"
+            ? "Confirm the booking out loud. If name or phone is missing, ask for it. Always say you will send an SMS confirmation."
+            : "Confirma a marcação em voz alta. Se faltar o nome ou o telemóvel, pede-o. Diz sempre que envias confirmação por SMS.",
+      };
     }
 
     case "list_bookings": {

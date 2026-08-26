@@ -60,6 +60,8 @@ describe("clinic marketing demo", () => {
     expect(instructions).toMatch(/Nunca dês conselhos médicos/);
     expect(instructions).toMatch(/SMS/);
     expect(instructions).toMatch(/especialidade/);
+    expect(instructions).toMatch(/Assim que uma ferramenta devolver/);
+    expect(instructions).toMatch(/a começar/);
     expect(instructions).not.toMatch(/corte de cabelo|barba/i);
 
     const session = buildGrokSessionConfig(clinic);
@@ -82,5 +84,15 @@ describe("clinic marketing demo", () => {
     expect(html).toContain("/voice-call.js");
     expect(js).toContain("heroSession.startCall");
     expect(js).not.toContain("/demo/barbearia");
+  });
+
+  it("voice client requests a follow-up after tools so Sofia does not stall", () => {
+    const js = readFileSync(new URL("../public/voice-call.js", import.meta.url), "utf8");
+    expect(js).toContain("async function flushPendingTools");
+    expect(js).toMatch(/if \(pendingTools\.size\) return;/);
+    expect(js).not.toMatch(/if \(!pendingTools\.size\) return;/);
+    expect(js).toContain('sendEvent({ type: "response.create" })');
+    expect(js).toContain("TOOL_TIMEOUT_MS");
+    expect(js).toContain("AbortController");
   });
 });
