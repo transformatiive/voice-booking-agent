@@ -164,13 +164,12 @@
 .callcard[data-phase="blocked"] .cc-talk,
 .callcard[data-phase="blocked"] .cc-keypad { display: none; }
 
-.cc-config-err {
-  margin: 10px 0 0;
-  padding: 10px 12px;
-  border-radius: 11px;
-  background: rgba(165,55,42,.1);
-  color: var(--err);
-  font-size: 13px;
+.callcard[data-phase="blocked"] .cc-controls .start {
+  opacity: .45;
+  pointer-events: none;
+  cursor: not-allowed;
+  background: var(--muted);
+  border-color: var(--muted);
 }
 
 .cc-controls .talk {

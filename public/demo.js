@@ -586,6 +586,7 @@ async function hangUp(opts = {}) {
 }
 
 function onCallButton() {
+  if (!grokVoiceEnabled || phase === "blocked") return;
   if (phase === "live") hangUp();
   else startCall();
 }
