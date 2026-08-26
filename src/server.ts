@@ -7,6 +7,7 @@ import { config, featureFlags, resolvedTelephonyProvider } from "./config.js";
 import { PLANS, PORTABILITY_SETUP_FEE_CENTS } from "./domain/plans.js";
 import type { AgentGender, Business, PlanId, UseCase, WeeklyHours } from "./domain/types.js";
 import { Store } from "./store/store.js";
+import { createPersistence } from "./store/persistence.js";
 import { createScheduler } from "./scheduling/index.js";
 import { ConversationManager, greeting } from "./agent/conversation.js";
 import { BillingService } from "./billing/stripe.js";
@@ -16,13 +17,12 @@ import { buildIncomingTeXML, handleVoiceFunction } from "./telephony/voice.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
 
-const store = new Store(config.dataDir);
+const persistence = createPersistence();
+const store = new Store(persistence);
 const scheduler = createScheduler(store);
 const agent = new ConversationManager(store, scheduler);
 const billing = new BillingService(store);
 const telephony = new TelephonyService(store);
-
-seedDemoBusiness(store);
 
 const app = express();
 
@@ -236,9 +236,20 @@ app.get(["/dpa", "/data-processing"], (_req, res) => res.sendFile(join(publicDir
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) {
+  main().catch((err) => {
+    console.error("Fatal startup error:", err);
+    process.exit(1);
+  });
+}
+
+async function main(): Promise<void> {
+  await store.init();
+  seedDemoBusiness(store);
   app.listen(config.port, () => {
     console.log(`voice-agents listening on ${config.publicBaseUrl}`);
-    console.log(`features: ${JSON.stringify(featureFlags())}, telephony=${resolvedTelephonyProvider()}`);
+    console.log(
+      `persistence=${persistence.kind}, features=${JSON.stringify(featureFlags())}, telephony=${resolvedTelephonyProvider()}`,
+    );
   });
 }
 

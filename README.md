@@ -43,7 +43,7 @@ Web/voice demo ──▶ /api/business/:slug/message ──── ConversationMa
 | --- | --- |
 | Config + feature flags | `src/config.ts` |
 | Domain (business, service, resource, plan) | `src/domain/` |
-| Store (JSON persistence; mount a volume) | `src/store/` |
+| Store (Postgres or JSON persistence) | `src/store/` |
 | Scheduling (Cal.com + in-memory) | `src/scheduling/` |
 | Conversational agent (PT/EN) | `src/agent/` |
 | Billing (Stripe) | `src/billing/` |
@@ -109,6 +109,20 @@ railway variables set PUBLIC_BASE_URL=https://<your-app>.up.railway.app
 Set integration variables (see `.env.example`) in the Railway service to light
 up Cal.com, Stripe, and Telnyx/Zadarma. Without them the service still boots and
 serves the demo.
+
+### Persistence
+
+- **Postgres (recommended, production):** add the Railway **Postgres** plugin and
+  the service picks up `DATABASE_URL` automatically. On boot the app creates its
+  tables (`businesses`, `bookings`) and loads/saves there. Set `DATABASE_SSL=true`
+  if you use Postgres' public proxy URL (the internal `*.railway.internal` URL
+  does not need it).
+- **JSON file (dev/demo only):** with no `DATABASE_URL`, data is stored in
+  `DATA_DIR/db.json`. On Railway the container filesystem is ephemeral, so mount a
+  **Volume** at `/data` (the Dockerfile sets `DATA_DIR=/data`) to persist it.
+
+The store keeps data in memory for fast synchronous reads and persists through the
+selected backend (`src/store/persistence.ts`).
 
 ## Status / next steps
 

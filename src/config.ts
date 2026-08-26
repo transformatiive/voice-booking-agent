@@ -21,6 +21,13 @@ export const config = {
   publicBaseUrl: env("PUBLIC_BASE_URL") ?? `http://localhost:${process.env.PORT ?? 3000}`,
   dataDir: env("DATA_DIR") ?? join(process.cwd(), "data"),
 
+  database: {
+    /** When set (e.g. Railway Postgres), the app persists to Postgres. */
+    url: env("DATABASE_URL"),
+    /** Force SSL for the DB connection (needed for Railway's public proxy URL). */
+    ssl: env("DATABASE_SSL") === "true",
+  },
+
   scheduling: {
     /** Cal.com API base (v2). */
     calApiBase: env("CAL_API_BASE") ?? "https://api.cal.com/v2",
