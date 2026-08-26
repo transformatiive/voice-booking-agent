@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Atende · Demo do assistente</title>
+    <title>Atende · Chamada de voz</title>
     <link rel="stylesheet" href="/landing.css" />
     <link rel="stylesheet" href="/app.css" />
   </head>
@@ -21,22 +21,55 @@
           <ul id="bookings" class="bookings-list"><li class="when">Sem marcações.</li></ul>
         </div>
         <div class="panel">
-          <h2>Experimente dizer</h2>
-          <ul class="bookings-list" id="hints"></ul>
+          <h2>Experimente dizer em voz</h2>
+          <p class="panel-hint">Toque num exemplo para o microfone ouvir — não envia texto.</p>
+          <div id="prompts" class="voice-prompts"></div>
         </div>
       </aside>
 
-      <main class="chat">
-        <div class="chat-head">
-          <span class="status-dot" id="statusDot"></span>
-          <span id="statusText">A ligar…</span>
+      <main class="demo-stage">
+        <div class="callcard-stage">
+          <div class="callcard callcard-demo" id="callcard" data-phase="idle">
+            <div class="cc-top">
+              <span class="cc-live"><span class="rec"></span> <span id="liveLabel">PRONTO A LIGAR</span></span>
+              <span id="ccTimer">00:00</span>
+            </div>
+            <div class="cc-agent">
+              <div class="cc-avatar" id="agentAvatar">S</div>
+              <div>
+                <div class="nm" id="agentNm">Sofia</div>
+                <div class="rl" id="agentRl">Assistente de voz</div>
+              </div>
+            </div>
+            <div class="waveform idle" id="wave" aria-hidden="true"></div>
+            <div class="caption" aria-live="polite">
+              <div class="spk" id="capSpk">Chamada de voz</div>
+              <div class="txt" id="capTxt">Toque em Ligar. A Sofia atende ao telefone — fale, não escreva.</div>
+            </div>
+            <div class="cc-controls">
+              <button type="button" id="muteBtn" class="cc-mute" aria-label="Sem som" aria-pressed="false" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 5 6 9H2v6h4l5 4V5z"/></svg>
+              </button>
+              <button type="button" id="talkBtn" class="talk cc-talk" aria-label="Toque para falar" disabled>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a4 4 0 0 0-4 4v5a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8"/></svg>
+              </button>
+              <button type="button" id="callBtn" class="start" aria-label="Ligar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15.5c-1.2 0-2.4-.2-3.5-.6-.35-.12-.75-.03-1 .24l-1.5 1.5a15 15 0 0 1-6.6-6.6l1.5-1.5c.27-.27.36-.66.24-1A11 11 0 0 1 9.5 4 1 1 0 0 0 8.5 3H5a1 1 0 0 0-1 1 17 17 0 0 0 17 17 1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
+                <span id="callBtnLabel">Ligar</span>
+              </button>
+              <button type="button" id="keypadBtn" class="cc-keypad" aria-label="Teclado (recurso)" aria-pressed="false" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="5" cy="5" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="19" cy="5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+              </button>
+            </div>
+            <form id="fallback" class="cc-fallback" hidden>
+              <p>Recurso se o microfone não estiver disponível — o que diria ao telefone:</p>
+              <div class="fallback-row">
+                <input id="fallbackInput" type="text" autocomplete="off" placeholder="Fale por escrito só como recurso…" />
+                <button type="submit" class="btn btn-ghost btn-sm">Dizer</button>
+              </div>
+            </form>
+          </div>
         </div>
-        <div id="messages" class="messages" aria-live="polite"></div>
-        <form id="composer" class="composer">
-          <button type="button" id="mic" class="btn btn-ghost mic" title="Falar">🎙️</button>
-          <input id="input" type="text" autocomplete="off" placeholder="Escreva ou toque no microfone…" />
-          <button type="submit" class="btn btn-primary">Enviar</button>
-        </form>
       </main>
     </div>
     <script src="/demo.js"></script>

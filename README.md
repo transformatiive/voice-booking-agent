@@ -60,7 +60,7 @@ npm run dev            # http://localhost:3000
 
 - Landing: `/`
 - Backoffice: `/app/:slug` (a demo `barbearia-lisboa` is seeded)
-- Voice demo: `/demo/:slug`
+- Voice demo: `/demo/:slug` (in-browser **voice call** with Sofia — not a text chat)
 
 Copy `.env.example` and fill only the integrations you want to activate.
 
