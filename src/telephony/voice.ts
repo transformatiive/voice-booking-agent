@@ -61,14 +61,28 @@ function findServiceByName(business: Business, name: string): Service | null {
   );
 }
 
+export const VOICE_FUNCTION_NAMES = [
+  "list_services",
+  "get_slots",
+  "book_appointment",
+  "list_bookings",
+  "cancel_appointment",
+] as const;
+
+export type VoiceFunctionName = (typeof VOICE_FUNCTION_NAMES)[number];
+
 export interface VoiceFunctionCall {
   name: string;
   arguments: Record<string, unknown>;
 }
 
+function isVoiceFunctionName(name: string): name is VoiceFunctionName {
+  return (VOICE_FUNCTION_NAMES as readonly string[]).includes(name);
+}
+
 /**
  * Function/tool webhook for a production voice LLM (Grok Live 2 / Retell / Vapi).
- * The orchestrator calls these to read services, get open slots, and book.
+ * The orchestrator calls these to read services, get open slots, book, list, and cancel.
  */
 export async function handleVoiceFunction(
   business: Business,
@@ -77,6 +91,10 @@ export async function handleVoiceFunction(
   call: VoiceFunctionCall,
   now: Date = new Date(),
 ): Promise<Record<string, unknown>> {
+  if (!isVoiceFunctionName(call.name)) {
+    return { error: "unknown_function", name: call.name };
+  }
+
   switch (call.name) {
     case "list_services":
       return {
@@ -126,7 +144,45 @@ export async function handleVoiceFunction(
       return { ok: true, bookingId: result.booking.id, start: result.booking.start };
     }
 
-    default:
-      return { error: "unknown_function", name: call.name };
+    case "list_bookings": {
+      const bookings = store.listBookings(business.id);
+      return {
+        bookings: bookings.map((b) => ({
+          id: b.id,
+          serviceName: b.serviceName,
+          start: b.start,
+          customerName: b.customerName,
+        })),
+      };
+    }
+
+    case "cancel_appointment": {
+      const bookings = store.listBookings(business.id);
+      if (bookings.length === 0) {
+        return { ok: false, error: "no_bookings" };
+      }
+      const bookingId = call.arguments.bookingId ? String(call.arguments.bookingId) : "";
+      const serviceName = call.arguments.service ? String(call.arguments.service).toLowerCase() : "";
+      const target = bookingId
+        ? bookings.find((b) => b.id === bookingId)
+        : serviceName
+          ? bookings.find(
+              (b) =>
+                b.serviceName.toLowerCase() === serviceName ||
+                b.serviceName.toLowerCase().includes(serviceName) ||
+                serviceName.includes(b.serviceName.toLowerCase()),
+            )
+          : bookings[bookings.length - 1];
+      if (!target) {
+        return { ok: false, error: "booking_not_found" };
+      }
+      await scheduler.cancel(business, target);
+      return { ok: true, cancelledId: target.id, serviceName: target.serviceName, start: target.start };
+    }
+
+    default: {
+      const exhaustive: never = call.name;
+      return { error: "unknown_function", name: String(exhaustive) };
+    }
   }
 }
