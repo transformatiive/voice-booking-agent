@@ -46,6 +46,7 @@ export class Store {
     const loaded = persistence.loadSync?.();
     if (loaded) {
       this.db = loaded;
+      this.normalize();
     }
   }
 
@@ -56,6 +57,27 @@ export class Store {
     }
     if (this.persistence.load) {
       this.db = await this.persistence.load();
+      this.normalize();
+    }
+  }
+
+  /** Backfill fields added after some rows were persisted (forward-compat). */
+  private normalize(): void {
+    for (const b of this.db.businesses) {
+      // Rows created before the account-status feature were already operational,
+      // so treat any missing/invalid status as active.
+      if (b.status !== "pending" && b.status !== "active") {
+        b.status = "active";
+      }
+      if (b.numberPreference !== "new" && b.numberPreference !== "port") {
+        b.numberPreference = "new";
+      }
+      if (b.contactEmail === undefined) {
+        b.contactEmail = null;
+      }
+      if (b.contactPhone === undefined) {
+        b.contactPhone = null;
+      }
     }
   }
 
