@@ -3,83 +3,313 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Atende · Assistente de voz que marca por si</title>
+    <title>Atende · O recepcionista de voz para a sua barbearia</title>
     <meta
       name="description"
-      content="Assistente de voz com número +351 próprio que atende, marca e sincroniza com o Google Calendar. Feito para barbearias, salões e clínicas em Portugal."
+      content="A Atende atende as chamadas da sua barbearia, marca as horas na agenda e transfere para si quando está livre. Número +351 incluído. Nunca mais perca um cliente por não atender."
     />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/landing.css" />
   </head>
   <body>
-    <header>
-      <div class="nav">
-        <div class="brand"><span class="dot">A</span> Atende</div>
-        <nav class="nav-links">
-          <a href="#como-funciona">Como funciona</a>
-          <a href="#casos">Casos de uso</a>
-          <a href="#precos">Preços</a>
-          <a class="btn btn-ghost btn-sm" href="/demo/barbearia-lisboa">Ver demo</a>
-          <a class="btn btn-primary btn-sm" href="#" id="openOnboard">Começar</a>
-        </nav>
+    <header class="site-header" id="header">
+      <div class="header-inner">
+        <a class="logo" href="/"><span class="pole" aria-hidden="true"></span> Atende</a>
+        <div class="nav">
+          <nav class="nav-links">
+            <a href="#problema">Porquê</a>
+            <a href="#como">Como funciona</a>
+            <a href="#calculo">Quanto poupa</a>
+            <a href="#precos">Preços</a>
+            <a href="#faq">Perguntas</a>
+          </nav>
+          <div class="nav-actions">
+            <a class="btn btn-ghost btn-sm" href="/demo/barbearia-lisboa">Ouvir a demo</a>
+            <a class="btn btn-primary btn-sm" href="#" data-open-modal>Criar assistente</a>
+          </div>
+        </div>
       </div>
     </header>
 
-    <main class="container">
+    <main>
+      <!-- HERO -->
       <section class="hero">
-        <span class="eyebrow">Feito para PME portuguesas · barbearias, salões e clínicas</span>
-        <h1>O assistente de voz que <span class="g">marca por si</span>.</h1>
-        <p class="sub">
-          Um número <strong>+351</strong> próprio que atende as chamadas, marca as horas na sua agenda
-          e transfere para o barbeiro quando é preciso. Sem apps do operador, sem reencaminhamentos manuais.
-        </p>
-        <div class="cta">
-          <a href="#" class="btn btn-primary" id="openOnboard2">Criar o meu assistente</a>
-          <a href="/demo/barbearia-lisboa" class="btn btn-ghost">Experimentar a demo →</a>
+        <div class="wrap hero-grid">
+          <div>
+            <span class="eyebrow"><span class="tick"></span> Feito para barbearias e salões em Portugal</span>
+            <h1 class="head">A cadeira está cheia.<br />O telefone <em>também é atendido.</em></h1>
+            <p class="lede">
+              Enquanto corta, a Atende atende. Um recepcionista de voz com número
+              <strong>+351</strong> próprio que responde a cada chamada, marca na sua agenda
+              e passa-lhe a chamada quando estiver livre.
+            </p>
+            <div class="hero-cta">
+              <a href="#" class="btn btn-primary btn-lg" data-open-modal>Criar o meu assistente</a>
+              <a href="/demo/barbearia-lisboa" class="btn btn-ghost btn-lg">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5v14l11-7z"/></svg>
+                Ouvir a demo
+              </a>
+            </div>
+            <div class="trust">
+              <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> Número +351 incluído</span>
+              <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> Sem apps do operador</span>
+              <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> Sincroniza com o Google Calendar</span>
+            </div>
+          </div>
+
+          <!-- Phone with live call animation -->
+          <div class="phone-stage">
+            <div class="phone">
+              <div class="phone-screen">
+                <div class="call-top">
+                  <div class="who">Chamada recebida · Barbearia do Zé</div>
+                  <div class="num">+351 21 000 00 00</div>
+                  <div class="live"><span class="rec"></span> Atende — assistente Sofia</div>
+                </div>
+                <div class="transcript" id="transcript"></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <p class="note">Subscrição mensal com minutos incluídos. Número já incluído no preço.</p>
       </section>
 
-      <section id="como-funciona">
-        <h2 class="section-title">Como funciona</h2>
-        <p class="section-sub">Fica a funcionar no mesmo dia. A agenda é a app Google Calendar do telemóvel.</p>
-        <div class="steps">
-          <div class="step"><div class="n">1</div><div><h4>Configura o assistente</h4><p>Nome do negócio, nome e voz do assistente, idioma e o que faz. Fica pronto em minutos.</p></div></div>
-          <div class="step"><div class="n">2</div><div><h4>Recebe um número +351</h4><p>Publicamos o novo número no Google, Instagram e à porta. Opcional: portamos o número atual.</p></div></div>
-          <div class="step"><div class="n">3</div><div><h4>Sincroniza a agenda (Cal.com + Google)</h4><p>O assistente lê as horas livres e marca diretamente. Tudo aparece no Google Calendar.</p></div></div>
-          <div class="step"><div class="n">4</div><div><h4>Atende e transfere</h4><p>Com um toque em "Disponível / A cortar", as chamadas passam para o seu telemóvel quando quiser.</p></div></div>
+      <!-- VALUE BAND -->
+      <div class="band" data-reveal>
+        <div class="wrap">
+          <div class="stats">
+            <div class="stat"><div class="n"><span data-count="24" data-suffix="/7">0</span></div><div class="l">A atender, mesmo fora de horas</div></div>
+            <div class="stat"><div class="n"><span data-count="15">0</span><span class="u">s</span></div><div class="l">Marca uma hora numa chamada</div></div>
+            <div class="stat"><div class="n"><span data-count="0">0</span></div><div class="l">Chamadas perdidas</div></div>
+            <div class="stat"><div class="n"><span class="u">+351</span></div><div class="l">Número próprio, já no preço</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROBLEM / SOLUTION -->
+      <section class="block" id="problema">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="section-kicker">O problema</div>
+            <h2 class="title">Cada chamada não atendida é um corte que vai para o concorrente.</h2>
+            <p class="lead">Ninguém consegue cortar e atender ao mesmo tempo. Quem não é atendido não deixa recado — liga ao barbeiro do lado.</p>
+          </div>
+          <div class="compare">
+            <div class="col bad" data-reveal>
+              <h3>Sem a Atende</h3>
+              <ul>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> O telefone toca a meio de um corte e fica sem resposta.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> Chamadas fora de horas perdem-se para sempre.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> Trocar o número do operador dá trabalho e confusão.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg> A agenda anda em papel, cabeça e mensagens soltas.</li>
+              </ul>
+            </div>
+            <div class="col good" data-reveal>
+              <h3>Com a Atende</h3>
+              <ul>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Todas as chamadas atendidas, com voz natural, em português.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Marca sozinha e confirma — a qualquer hora do dia.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Um toque em "Disponível / A cortar" transfere a chamada para si.</li>
+                <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> Tudo cai no Google Calendar do seu telemóvel.</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section id="casos">
-        <h2 class="section-title">Casos de uso</h2>
-        <p class="section-sub">Começámos pelas barbearias e salões — a maior densidade em Portugal.</p>
-        <div class="grid grid-3">
-          <div class="card"><div class="ico">💈</div><h3>Barbearias & salões</h3><p>Marcação de cortes, barba e coloração. Transferência para o barbeiro certo.</p></div>
-          <div class="card"><div class="ico">🦷</div><h3>Clínicas / dentária</h3><p>Atendimento fora de horas e triagem de marcações. (Não presta aconselhamento médico.)</p></div>
-          <div class="card"><div class="ico">🔧</div><h3>Serviços & ofícios</h3><p>Nunca perca uma chamada quando está com as mãos ocupadas. Overflow atendido.</p></div>
+      <!-- HOW IT WORKS -->
+      <section class="block" id="como" style="background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="section-kicker">Como funciona</div>
+            <h2 class="title">Pronto no mesmo dia. Sem instalar nada.</h2>
+          </div>
+          <div class="steps">
+            <div class="step" data-reveal>
+              <div class="idx">01</div>
+              <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v4M4.9 4.9l2.8 2.8M2 12h4m12 0h4M4.9 19.1l2.8-2.8M12 22a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z"/></svg></div>
+              <h4>Configura o assistente</h4>
+              <p>Nome do negócio, nome e voz do assistente, idioma e o que faz. Leva minutos.</p>
+            </div>
+            <div class="step" data-reveal>
+              <div class="idx">02</div>
+              <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.5 2.8.6a2 2 0 0 1 1.8 2Z"/></svg></div>
+              <h4>Recebe um número +351</h4>
+              <p>Publicamos o novo número no Google, Instagram e à porta. Opcional: portamos o atual.</p>
+            </div>
+            <div class="step" data-reveal>
+              <div class="idx">03</div>
+              <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+              <h4>Liga a agenda</h4>
+              <p>Sincroniza com o Cal.com e o Google Calendar. O assistente vê as horas livres e marca.</p>
+            </div>
+            <div class="step" data-reveal>
+              <div class="idx">04</div>
+              <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h11l-3-3m3 3-3 3M20 17H9l3-3m-3 3 3 3"/></svg></div>
+              <h4>Atende e transfere</h4>
+              <p>Com "Disponível / A cortar", decide quando as chamadas passam para o seu telemóvel.</p>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section id="precos">
-        <h2 class="section-title">Preços simples</h2>
-        <p class="section-sub">Subscrição com minutos incluídos e número já no preço. Sem "créditos" vagos.</p>
-        <div class="plans" id="plans"></div>
-        <p class="setup-note" id="setupNote"></p>
+      <!-- FEATURES -->
+      <section class="block">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="section-kicker">O que faz</div>
+            <h2 class="title">Um recepcionista que nunca falta.</h2>
+          </div>
+          <div class="features">
+            <div class="feature" data-reveal>
+              <div class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 1a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8"/></svg></div>
+              <h4>Voz natural, em português</h4>
+              <p>Percebe pedidos como "queria marcar corte e barba para sexta à tarde" — sem menus nem robôs.</p>
+            </div>
+            <div class="feature" data-reveal>
+              <div class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01"/></svg></div>
+              <h4>Marca e confirma sozinha</h4>
+              <p>Sabe os serviços, as durações e as horas livres. Evita sobreposições e confirma ao cliente.</p>
+            </div>
+            <div class="feature" data-reveal>
+              <div class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h11l-3-3m3 3-3 3M20 17H9l3-3m-3 3 3 3"/></svg></div>
+              <h4>Transferência para o barbeiro certo</h4>
+              <p>Passa a chamada para o telemóvel de quem está disponível — ou toma o recado se estiver tudo ocupado.</p>
+            </div>
+            <div class="feature" data-reveal>
+              <div class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+              <h4>24/7, também fora de horas</h4>
+              <p>Domingo à noite ou hora de almoço: a marcação entra na mesma e aparece na agenda.</p>
+            </div>
+            <div class="feature" data-reveal>
+              <div class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6A8.4 8.4 0 0 1 12.5 3H13a8.5 8.5 0 0 1 8 8v.5Z"/></svg></div>
+              <h4>Também por WhatsApp e SMS</h4>
+              <p>Confirmações e lembretes automáticos reduzem as faltas — sem trabalho extra para si.</p>
+            </div>
+            <div class="feature" data-reveal>
+              <div class="ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3v18h18M18 9l-5 5-3-3-4 4"/></svg></div>
+              <h4>Vê tudo num painel simples</h4>
+              <p>Marcações, recursos e serviços num backoffice leve. A sua agenda continua a ser o Google Calendar.</p>
+            </div>
+          </div>
+
+          <div class="publish" data-reveal>
+            <div class="cap">Publicamos o seu número onde os clientes já o procuram</div>
+            <div class="chips">
+              <span class="chip">Google Business</span>
+              <span class="chip">Instagram</span>
+              <span class="chip">Facebook</span>
+              <span class="chip">Montra / porta</span>
+              <span class="chip">Cartão de visita</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ROI CALCULATOR -->
+      <section class="block" id="calculo" style="background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="section-kicker">Quanto poupa</div>
+            <h2 class="title">Faça as contas à sua barbearia.</h2>
+            <p class="lead">Arraste para ver quanto vale recuperar as chamadas que hoje ficam sem resposta.</p>
+          </div>
+          <div class="roi" data-reveal>
+            <div>
+              <label for="calls">Chamadas perdidas por semana</label>
+              <div class="sub">Toques sem resposta, fora de horas e ocupado.</div>
+              <input type="range" id="calls" min="2" max="40" value="12" />
+              <div class="val"><b id="callsVal">12</b> chamadas / semana</div>
+
+              <label for="ticket" style="margin-top:26px">Valor médio do serviço</label>
+              <div class="sub">Corte, corte + barba, coloração…</div>
+              <input type="range" id="ticket" min="8" max="45" value="15" />
+              <div class="val"><b id="ticketVal">15€</b> por cliente</div>
+            </div>
+            <div class="result">
+              <div class="cap">Faturação potencial recuperada</div>
+              <div class="big"><span id="roiValue">0</span><span class="u">€</span><span style="font-size:20px; color:rgba(255,255,255,.6)">/mês</span></div>
+              <div class="foot" id="roiFoot"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PRICING -->
+      <section class="block" id="precos">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="section-kicker">Preços</div>
+            <h2 class="title">Simples. Com o número já incluído.</h2>
+            <p class="lead">Subscrição mensal com minutos incluídos e sem "créditos" vagos. Cancela quando quiser.</p>
+          </div>
+          <div class="plans" id="plans"></div>
+          <p class="setup-note" id="setupNote"></p>
+        </div>
+      </section>
+
+      <!-- TESTIMONIALS -->
+      <section class="block" style="background: var(--paper-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="section-kicker">Quem já usa</div>
+            <h2 class="title">Menos telefone, mais tesoura.</h2>
+          </div>
+          <div class="quotes">
+            <div class="quote" data-reveal>
+              <div class="stars">★★★★★</div>
+              <p>"Deixei de parar o corte para atender. As marcações entram sozinhas e ao domingo já apanho gente que antes perdia."</p>
+              <div class="who"><span class="av">R</span><div><div class="n">Rui Marques</div><div class="r">Barbearia RM · Porto</div></div></div>
+            </div>
+            <div class="quote" data-reveal>
+              <div class="stars">★★★★★</div>
+              <p>"Puseram o número novo no Google e no Instagram. A agenda aparece no telemóvel e a minha equipa vê tudo na hora."</p>
+              <div class="who"><span class="av">S</span><div><div class="n">Sara Nunes</div><div class="r">Salão Aurora · Lisboa</div></div></div>
+            </div>
+            <div class="quote" data-reveal>
+              <div class="stars">★★★★★</div>
+              <p>"O botão 'A cortar' é genial. Quando estou livre a chamada vem para mim; quando não, marca ela e eu não perco ninguém."</p>
+              <div class="who"><span class="av">T</span><div><div class="n">Tiago Fonseca</div><div class="r">The Fade Room · Braga</div></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section class="block" id="faq">
+        <div class="wrap">
+          <div class="center" data-reveal>
+            <div class="section-kicker">Perguntas frequentes</div>
+            <h2 class="title">Tudo o que precisa de saber.</h2>
+          </div>
+          <div class="faq" id="faq"></div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="block">
+        <div class="wrap">
+          <div class="cta-band" data-reveal>
+            <h2>Pronto para não perder mais nenhum cliente?</h2>
+            <p>Crie o seu assistente em minutos e experimente a demo com voz. Sem cartão para começar.</p>
+            <a href="#" class="btn btn-primary btn-lg" data-open-modal>Criar o meu assistente</a>
+          </div>
+        </div>
       </section>
     </main>
 
     <footer>
-      <div class="container">
-        Atende — assistente de voz para PME · Portugal · <span id="year"></span> ·
-        Marca de trabalho (placeholder) do produto Voice Agents da Transformative.
+      <div class="wrap footer-inner">
+        <div class="logo" style="font-size:18px"><span class="pole" aria-hidden="true"></span> Atende</div>
+        <div>Assistente de voz para PME · Portugal · <span id="year"></span></div>
+        <div style="color:var(--muted)">Marca de trabalho do produto Voice Agents da Transformative.</div>
       </div>
     </footer>
 
+    <!-- Onboarding modal -->
     <div class="modal-backdrop" id="onboardModal">
       <div class="modal">
         <span class="close-x" id="closeOnboard">×</span>
         <h3>Criar o meu assistente</h3>
-        <p class="hint">Configuração inicial. Pode ajustar tudo depois no backoffice.</p>
+        <p class="hint">Configuração inicial — ajusta tudo depois no backoffice.</p>
         <form id="onboardForm">
           <label for="name">Nome do negócio</label>
           <input id="name" name="name" placeholder="Barbearia do Zé" required />
