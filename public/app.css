@@ -164,9 +164,14 @@
 }
 .cc-controls .talk:disabled { opacity: .45; }
 .cc-controls .talk.listening {
-  background: var(--err); border-color: var(--err);
   animation: pulse 1.2s infinite;
 }
+.callcard[data-phase="live"] .cc-controls .end {
+  width: auto; min-width: 46px; height: 46px; padding: 0 14px; border-radius: 14px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-weight: 700; font-size: 13px; font-family: var(--sans);
+}
+.callcard[data-phase="live"] .cc-controls .end span { display: inline; }
 .cc-controls .start {
   width: auto; min-width: 64px; padding: 0 22px; border-radius: 16px; height: 52px;
   background: var(--ok); color: #fff; border-color: var(--ok);
@@ -174,11 +179,6 @@
   font-weight: 700; font-size: 15px; font-family: var(--sans);
   touch-action: manipulation;
 }
-.callcard[data-phase="live"] .cc-controls .start {
-  width: 46px; min-width: 46px; height: 46px; padding: 0; border-radius: 50%;
-  background: var(--accent); border-color: var(--accent);
-}
-.callcard[data-phase="live"] .cc-controls .start span { display: none; }
 .cc-controls button.cc-mute.muted { background: var(--bg-alt); color: var(--accent); border-color: var(--accent); }
 .cc-controls button:disabled { opacity: .4; cursor: not-allowed; }
 

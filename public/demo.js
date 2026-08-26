@@ -226,15 +226,24 @@ function pickVoice() {
 function speak(text) {
   if (!("speechSynthesis" in window)) return Promise.resolve();
   return new Promise((resolve) => {
-    window.speechSynthesis.cancel();
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(tid);
+      resolve();
+    };
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
     const u = new SpeechSynthesisUtterance(text);
     u.lang = speechLang();
     u.rate = 1.04;
     const voice = pickVoice();
     if (voice) u.voice = voice;
-    u.onend = () => resolve();
-    u.onerror = () => resolve();
-    window.speechSynthesis.speak(u);
+    u.onend = done;
+    u.onerror = done;
+    const tid = setTimeout(done, Math.min(16000, 900 + text.length * 70));
+    try { window.speechSynthesis.speak(u); } catch { done(); return; }
+    setTimeout(() => { if (!window.speechSynthesis.speaking) done(); }, 500);
   });
 }
 
@@ -312,7 +321,7 @@ function showFallback(open) {
 }
 
 async function handleUtterance(text) {
-  if (!text || busy || phase !== "live") return;
+  if (!text || phase !== "live" || busy) return;
   busy = true;
   stopListening();
   setCaption(copy().you, text);
@@ -330,16 +339,14 @@ async function handleUtterance(text) {
     el.avatar.classList.add("speaking");
     setWave("speaking");
     await Promise.all([speak(reply), setCaption(agentName, reply, true)]);
-    el.avatar.classList.remove("speaking");
-    setWave("idle");
     refreshBookings();
-    busy = false;
-    if (phase === "live" && !muted && autoListen) startListening();
   } catch {
-    busy = false;
-    setWave("idle");
-    el.avatar.classList.remove("speaking");
     setCaption(agentName, copy().error);
+  } finally {
+    busy = false;
+    el.avatar.classList.remove("speaking");
+    if (phase === "live") setWave(muted ? "muted" : "idle");
+    if (phase === "live" && !muted && autoListen && SpeechRec && el.fallback.hidden) startListening();
   }
 }
 
@@ -363,13 +370,16 @@ async function startCall() {
     await Promise.all([speak(reply), setCaption(agentName, reply, true)]);
     el.avatar.classList.remove("speaking");
     setWave("idle");
-    busy = false;
-    if (!SpeechRec) showFallback(true);
-    else if (!muted) startListening();
+    if (!SpeechRec) {
+      autoListen = false;
+      showFallback(true);
+    } else if (!muted) startListening();
   } catch {
-    busy = false;
     setCaption(agentName, t.error);
     setWave("idle");
+  } finally {
+    busy = false;
+    el.avatar.classList.remove("speaking");
   }
 }
 
