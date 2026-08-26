@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Voice Booking Agent</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo">VB</div>
+          <div>
+            <h1>Voice Booking</h1>
+            <p>Your appointment assistant</p>
+          </div>
+        </div>
+
+        <section class="panel">
+          <h2>Upcoming appointments</h2>
+          <ul id="bookings" class="bookings">
+            <li class="empty">No appointments yet.</li>
+          </ul>
+        </section>
+
+        <section class="panel hints">
+          <h2>Try saying</h2>
+          <ul>
+            <li>"Book a haircut tomorrow at 3pm"</li>
+            <li>"What services do you offer?"</li>
+            <li>"Is Friday morning free for a massage?"</li>
+            <li>"Show my appointments"</li>
+          </ul>
+        </section>
+      </aside>
+
+      <main class="chat">
+        <header class="chat-header">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Connecting…</span>
+        </header>
+
+        <div id="messages" class="messages" aria-live="polite"></div>
+
+        <form id="composer" class="composer">
+          <button type="button" id="micButton" class="mic" title="Speak" aria-label="Speak">
+            &#127908;
+          </button>
+          <input
+            id="input"
+            type="text"
+            autocomplete="off"
+            placeholder="Type or press the mic to speak…"
+          />
+          <button type="submit" class="send">Send</button>
+        </form>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
