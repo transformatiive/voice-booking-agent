@@ -194,7 +194,17 @@ function setNavOpen(open) {
 }
 navToggle?.addEventListener("click", () => setNavOpen(!header.classList.contains("nav-open")));
 siteNav?.querySelectorAll("a").forEach((link) => {
-  link.addEventListener("click", () => setNavOpen(false));
+  link.addEventListener("click", (e) => {
+    const href = link.getAttribute("href") || "";
+    const target = href.startsWith("#") && href.length > 1 ? document.querySelector(href) : null;
+    setNavOpen(false);
+    if (!target) return;
+    e.preventDefault();
+    window.setTimeout(() => {
+      if (href === "#demo-call") scrollToDemoCard();
+      else target.scrollIntoView({ behavior: "smooth" });
+    }, 0);
+  });
 });
 document.addEventListener("click", (e) => {
   if (!header?.classList.contains("nav-open")) return;
@@ -271,6 +281,7 @@ document.getElementById("heroDemoCta")?.addEventListener("click", (e) => {
 });
 document.querySelectorAll('a[href="#demo-call"]').forEach((link) => {
   if (link.id === "heroDemoCta") return;
+  if (siteNav?.contains(link)) return;
   link.addEventListener("click", (e) => {
     e.preventDefault();
     scrollToDemoCard();
