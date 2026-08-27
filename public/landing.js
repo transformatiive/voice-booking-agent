@@ -201,7 +201,7 @@ document.addEventListener("click", (e) => {
   if (header.contains(e.target)) return;
   setNavOpen(false);
 });
-window.matchMedia("(min-width: 821px)").addEventListener("change", (e) => {
+window.matchMedia("(min-width: 561px)").addEventListener("change", (e) => {
   if (e.matches) setNavOpen(false);
 });
 
