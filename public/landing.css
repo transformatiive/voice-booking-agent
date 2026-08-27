@@ -184,7 +184,7 @@ section.alt { background: var(--bg-alt); border-top: 1px solid var(--line); bord
 .ex-panel { background: #fff; border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow-sm); padding: 22px; min-height: 380px; display: flex; flex-direction: column; }
 .ex-panel .cc-agent { margin: 16px 0 10px; width: 100%; }
 .ex-panel .waveform { height: 48px; margin-bottom: 12px; }
-.ex-panel .caption { min-height: 96px; flex: 1; }
+.ex-panel .caption { min-height: 96px; }
 .ex-scene { font-size: 13.5px; font-weight: 600; color: var(--ink-soft); margin: 0 0 12px; }
 .ex-listen { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .ex-listen svg { flex: none; }
