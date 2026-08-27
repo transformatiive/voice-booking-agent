@@ -86,6 +86,21 @@ describe("clinic marketing demo", () => {
     expect(js).not.toContain("/demo/barbearia");
   });
 
+  it("customer-facing homepage copy uses Google Calendar, not Cal.com", () => {
+    const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+    const js = readFileSync(new URL("../public/landing.js", import.meta.url), "utf8");
+    const termos = readFileSync(new URL("../public/termos.html", import.meta.url), "utf8");
+    const privacidade = readFileSync(new URL("../public/privacidade.html", import.meta.url), "utf8");
+    const dpa = readFileSync(new URL("../public/dpa.html", import.meta.url), "utf8");
+    for (const copy of [html, js, termos, privacidade, dpa]) {
+      expect(copy).not.toMatch(/cal\.com/i);
+    }
+    expect(html).toContain("Vê horas livres e conflitos na agenda Google, em tempo real.");
+    expect(html).toContain("A agenda continua no Google.");
+    expect(js).toMatch(/Google Calendar do negócio/);
+    expect(js).toMatch(/conflitos e sobreposições/);
+  });
+
   it("voice client requests a follow-up after tools so Sofia does not stall", () => {
     const js = readFileSync(new URL("../public/voice-call.js", import.meta.url), "utf8");
     expect(js).toContain("async function flushPendingTools");

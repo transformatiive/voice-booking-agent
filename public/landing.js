@@ -159,7 +159,7 @@ updateRoi();
 const FAQ = [
   ["Preciso de trocar de operador ou instalar alguma app?", "Não. Damos-lhe um número +351 novo que passa a publicar (Google, Instagram, à porta). O seu telemóvel pessoal continua pessoal. Se quiser manter o número atual, tratamos da portabilidade."],
   ["A voz soa a robô?", "Não. A Atende usa voz natural e percebe linguagem do dia-a-dia — \"queria marcar para sábado de manhã\" — sem menus de \"prima 1\"."],
-  ["Como é que a agenda funciona?", "O agendamento assenta no Cal.com com sincronização para o Google Calendar. Na prática, a sua agenda é a app Google Calendar do telemóvel — sem backoffice complicado."],
+  ["Como é que a agenda funciona?", "A Atende consulta o Google Calendar do negócio para ver horas livres e evitar conflitos e sobreposições. As marcações ficam na app Google Calendar do telemóvel — sem backoffice complicado."],
   ["E quando estou livre e quero atender?", "Tem um botão \"Disponível / Ocupado\". Em \"Disponível\", a chamada é transferida para o seu telemóvel; em \"Ocupado\", a Atende marca por si."],
   ["O número está mesmo incluído no preço?", "Sim. O custo do número +351 já está no valor do plano — sem taxas escondidas nem \"créditos\"."],
   ["Em nome de quem fica o número? E se eu quiser sair?", "O número é aprovisionado através da nossa operadora, com a sua empresa registada como utilizador (como a lei portuguesa exige para números nacionais). Na prática, o número é seu: temos uma garantia de portabilidade — se decidir sair, portamos o número para si, sem custos. Sem lock-in."],

@@ -29,7 +29,7 @@ export const PLANS: Record<PlanId, Plan> = {
     features: [
       "1 número +351 incluído",
       "200 minutos de atendimento incluídos",
-      "Agendamento por voz com sincronização Cal.com + Google Calendar",
+      "Agendamento por voz com Google Calendar (evita conflitos e sobreposições)",
       "Transferência de chamada para o seu telemóvel",
       "Suporte por email",
     ],
