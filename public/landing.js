@@ -45,12 +45,16 @@ async function loadPlans() {
 
 /* ---------- Modal ---------- */
 const modal = document.getElementById("onboardModal");
-function openModal() { modal.classList.add("open"); }
+function openModal() { setNavOpen(false); modal.classList.add("open"); }
 function closeModal() { modal.classList.remove("open"); }
 document.querySelectorAll("[data-open-modal]").forEach((el) => el.addEventListener("click", (e) => { e.preventDefault(); openModal(); }));
 document.getElementById("closeOnboard").addEventListener("click", closeModal);
 modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  closeModal();
+  setNavOpen(false);
+});
 document.getElementById("onboardForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = e.currentTarget;
@@ -175,11 +179,41 @@ document.querySelectorAll(".faq-q").forEach((btn) => btn.addEventListener("click
   ans.style.maxHeight = isOpen ? `${ans.scrollHeight}px` : "0";
 }));
 
-/* ---------- Header shrink ---------- */
+/* ---------- Header shrink + mobile menu ---------- */
 const header = document.getElementById("header");
+const navToggle = document.getElementById("navToggle");
+const siteNav = document.getElementById("siteNav");
 const onScroll = () => header.classList.toggle("scrolled", window.scrollY > 12);
 window.addEventListener("scroll", onScroll, { passive: true });
 onScroll();
+
+function setNavOpen(open) {
+  if (!header || !navToggle) return;
+  header.classList.toggle("nav-open", open);
+  navToggle.setAttribute("aria-expanded", String(open));
+}
+navToggle?.addEventListener("click", () => setNavOpen(!header.classList.contains("nav-open")));
+siteNav?.querySelectorAll("a").forEach((link) => {
+  link.addEventListener("click", (e) => {
+    const href = link.getAttribute("href") || "";
+    const target = href.startsWith("#") && href.length > 1 ? document.querySelector(href) : null;
+    setNavOpen(false);
+    if (!target) return;
+    e.preventDefault();
+    window.setTimeout(() => {
+      if (href === "#demo-call") scrollToDemoCard();
+      else target.scrollIntoView({ behavior: "smooth" });
+    }, 0);
+  });
+});
+document.addEventListener("click", (e) => {
+  if (!header?.classList.contains("nav-open")) return;
+  if (header.contains(e.target)) return;
+  setNavOpen(false);
+});
+window.matchMedia("(min-width: 561px)").addEventListener("change", (e) => {
+  if (e.matches) setNavOpen(false);
+});
 
 /* ---------- Homepage live clinic call (Grok Live 2) ---------- */
 const HERO_IDLE_SPEAKER = "Sofia · assistente";
@@ -247,6 +281,7 @@ document.getElementById("heroDemoCta")?.addEventListener("click", (e) => {
 });
 document.querySelectorAll('a[href="#demo-call"]').forEach((link) => {
   if (link.id === "heroDemoCta") return;
+  if (siteNav?.contains(link)) return;
   link.addEventListener("click", (e) => {
     e.preventDefault();
     scrollToDemoCard();

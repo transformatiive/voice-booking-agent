@@ -2,7 +2,7 @@
 <html lang="pt">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Atende · Recepcionista de voz para o seu negócio</title>
     <meta
       name="description"
@@ -15,19 +15,23 @@
     <header class="site-header" id="header">
       <div class="header-inner">
         <a class="logo" href="/"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 10v4"/><path d="M8 6.5v11"/><path d="M12 3v18"/><path d="M16 6.5v11"/><path d="M20 10v4"/></svg></span> Atende</a>
-        <div class="nav">
-          <nav class="nav-links">
+        <nav class="nav" id="siteNav" aria-label="Secções">
+          <div class="nav-links">
             <a href="#problema">Porquê</a>
             <a href="#como">Como funciona</a>
             <a href="#exemplos">Exemplos</a>
             <a href="#diferenca">Diferença</a>
             <a href="#precos">Preços</a>
             <a href="#faq">Perguntas</a>
-          </nav>
-          <div class="nav-actions">
-            <a class="btn btn-ghost btn-sm" href="#demo-call">Ouvir a demo</a>
-            <a class="btn btn-primary btn-sm" href="#" data-open-modal>Criar assistente</a>
           </div>
+          <a class="btn btn-ghost btn-sm" href="#demo-call">Ouvir a demo</a>
+        </nav>
+        <div class="nav-actions">
+          <a class="btn btn-primary btn-sm" href="#" data-open-modal>Criar assistente</a>
+          <button type="button" class="nav-toggle" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="siteNav">
+            <svg class="icon-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+            <svg class="icon-close" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
         </div>
       </div>
     </header>
