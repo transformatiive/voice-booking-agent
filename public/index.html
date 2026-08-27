@@ -25,7 +25,7 @@
             <a href="#faq">Perguntas</a>
           </nav>
           <div class="nav-actions">
-            <a class="btn btn-ghost btn-sm" href="/demo/barbearia-lisboa">Ouvir a demo</a>
+            <a class="btn btn-ghost btn-sm" href="#demo-call">Ouvir a demo</a>
             <a class="btn btn-primary btn-sm" href="#" data-open-modal>Criar assistente</a>
           </div>
         </div>
@@ -46,7 +46,7 @@
             </p>
             <div class="hero-cta">
               <a href="#" class="btn btn-primary btn-lg" data-open-modal>Criar o meu assistente</a>
-              <a href="/demo/barbearia-lisboa" class="btn btn-ghost btn-lg">
+              <a href="#demo-call" class="btn btn-ghost btn-lg" id="heroDemoCta">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                 Ouvir a demo
               </a>
@@ -58,26 +58,36 @@
             </div>
           </div>
 
-          <!-- Voice call card -->
-          <div class="callcard-stage">
-            <div class="callcard">
+          <!-- Live Grok Voice call card (clinic demo, stays on the homepage) -->
+          <div class="callcard-stage" id="demo-call">
+            <div class="callcard callcard-live-badge" id="heroCallcard" data-phase="idle">
               <div class="cc-top">
-                <span class="cc-live"><span class="rec"></span> CHAMADA AO VIVO</span>
+                <span class="cc-live"><span class="rec"></span> <span id="heroLiveLabel">CHAMADA AO VIVO</span></span>
                 <span id="ccTimer">00:00</span>
               </div>
               <div class="cc-agent">
-                <div class="cc-avatar">S</div>
-                <div><div class="nm">Sofia</div><div class="rl">Assistente de voz</div></div>
+                <div class="cc-avatar" id="heroAvatar">S</div>
+                <div><div class="nm" id="heroAgentNm">Sofia</div><div class="rl" id="heroAgentRl">Assistente de voz</div></div>
               </div>
-              <div class="waveform" id="wave" aria-hidden="true"></div>
-              <div class="caption">
-                <div class="spk" id="heroSpk">A atender…</div>
-                <div class="txt" id="heroTxt"></div>
+              <div class="waveform idle" id="wave" aria-hidden="true"></div>
+              <div class="caption" aria-live="polite">
+                <div class="spk" id="heroSpk">Sofia · assistente</div>
+                <div class="txt" id="heroTxt">Marcado, Miguel — consulta de dermatologia amanhã às 16h30. Envio confirmação por SMS.</div>
               </div>
+              <p class="cc-config-err" id="heroConfigErr" hidden></p>
+              <p class="cc-mic-err" id="heroMicErr" hidden></p>
               <div class="cc-controls">
-                <button aria-label="Sem som"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 5 6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6"/></svg></button>
-                <button aria-label="Teclado"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="5" cy="5" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="19" cy="5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
-                <button class="end" aria-label="Terminar"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15.5c-1.2 0-2.4-.2-3.5-.6-.35-.12-.75-.03-1 .24l-1.5 1.5a15 15 0 0 1-6.6-6.6l1.5-1.5c.27-.27.36-.66.24-1A11 11 0 0 1 9.5 4 1 1 0 0 0 8.5 3H5a1 1 0 0 0-1 1 17 17 0 0 0 17 17 1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg></button>
+                <button type="button" id="heroMute" class="cc-mute" aria-label="Sem som" aria-pressed="false" disabled>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 5 6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6"/></svg>
+                </button>
+                <button type="button" id="heroKeypad" class="cc-keypad" aria-label="Teclado" disabled>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="5" cy="5" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="19" cy="5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                </button>
+                <button type="button" id="heroCall" class="start" aria-label="Iniciar chamada">
+                  <svg class="ico-start" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  <svg class="ico-end" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15.5c-1.2 0-2.4-.2-3.5-.6-.35-.12-.75-.03-1 .24l-1.5 1.5a15 15 0 0 1-6.6-6.6l1.5-1.5c.27-.27.36-.66.24-1A11 11 0 0 1 9.5 4 1 1 0 0 0 8.5 3H5a1 1 0 0 0-1 1 17 17 0 0 0 17 17 1 1 0 0 0 1-1v-3.5a1 1 0 0 0-1-1z"/></svg>
+                  <span id="heroCallLabel">Iniciar chamada</span>
+                </button>
               </div>
             </div>
           </div>
@@ -444,6 +454,7 @@
       </div>
     </div>
 
+    <script src="/voice-call.js"></script>
     <script src="/landing.js"></script>
   </body>
 </html>

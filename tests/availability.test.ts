@@ -60,4 +60,11 @@ describe("availability", () => {
     expect(slots[0].getHours()).toBe(9);
     expect(slots[0].getMinutes()).toBe(30);
   });
+
+  it("does not throw on invalid dates or missing day hours", () => {
+    const { business, service } = makeBusiness();
+    const invalid = new Date("not-a-date");
+    expect(checkAvailability(business, service, invalid, [], NOW).ok).toBe(false);
+    expect(suggestSlots(business, service, invalid, [], NOW, 3)).toEqual([]);
+  });
 });

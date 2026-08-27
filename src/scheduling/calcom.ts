@@ -5,6 +5,8 @@ import type { BookInput, BookResult, Scheduler, Slot } from "./scheduler.js";
 import { InMemoryScheduler } from "./inMemoryScheduler.js";
 
 const CAL_API_VERSION = "2024-08-13";
+/** Voice demo must never stall on Cal.com; fall back to in-memory if it is slow. */
+const CAL_CALL_TIMEOUT_MS = 1_200;
 
 interface CalConfig {
   apiBase: string;
@@ -41,6 +43,7 @@ export class CalComScheduler implements Scheduler {
   private async call(config: CalConfig, path: string, init?: RequestInit): Promise<unknown> {
     const res = await fetch(`${config.apiBase}${path}`, {
       ...init,
+      signal: init?.signal ?? AbortSignal.timeout(CAL_CALL_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
         "cal-api-version": CAL_API_VERSION,

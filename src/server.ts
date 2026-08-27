@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import express from "express";
@@ -14,6 +13,7 @@ import { BillingService } from "./billing/stripe.js";
 import { TelephonyService } from "./telephony/index.js";
 import { buildIncomingTeXML, handleVoiceFunction } from "./telephony/voice.js";
 import { handleRealtimeSessionRequest, parseToolArguments } from "./telephony/grokRealtime.js";
+import { MARKETING_DEMO_SLUG, ensureDemoBusinesses } from "./store/seed.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
@@ -45,6 +45,17 @@ app.use(express.urlencoded({ extended: true }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", features: featureFlags(), telephony: resolvedTelephonyProvider() });
+});
+
+/** Marketing homepage live demo (clinic). Does not send users to /demo/:slug. */
+app.get("/api/demo", (_req, res) => {
+  const business = store.getBusinessBySlug(MARKETING_DEMO_SLUG);
+  res.json({
+    slug: MARKETING_DEMO_SLUG,
+    name: business?.name ?? "Clínica Central",
+    agentName: business?.agentName ?? "Sofia",
+    features: featureFlags(),
+  });
 });
 
 app.get("/api/plans", (_req, res) => {
@@ -238,11 +249,22 @@ app.post("/api/business/:slug/realtime/tool", async (req, res) => {
     });
     return;
   }
-  const result = await handleVoiceFunction(business, store, scheduler, {
-    name: String(req.body?.name ?? ""),
-    arguments: parseToolArguments(req.body?.arguments),
-  });
-  res.json(result);
+  try {
+    const result = await handleVoiceFunction(business, store, scheduler, {
+      name: String(req.body?.name ?? ""),
+      arguments: parseToolArguments(req.body?.arguments),
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("[realtime/tool]", err instanceof Error ? err.message : err);
+    res.json({
+      error: "tool_failed",
+      instruction:
+        business.locale === "en"
+          ? "Keep talking. Offer a nearby time and ask if it works."
+          : "Continua a falar. Oferece uma hora próxima e pergunta se serve.",
+    });
+  }
 });
 
 app.post("/voice/incoming/:slug", (req, res) => {
@@ -269,6 +291,15 @@ app.post("/voice/functions/:slug", async (req, res) => {
   const result = await handleVoiceFunction(business, store, scheduler, {
     name: String(req.body?.name ?? ""),
     arguments: (req.body?.arguments as Record<string, unknown>) ?? {},
+  }).catch((err: unknown) => {
+    console.error("[voice/functions]", err instanceof Error ? err.message : err);
+    return {
+      error: "tool_failed",
+      instruction:
+        business.locale === "en"
+          ? "Keep talking. Offer a nearby time and ask if it works."
+          : "Continua a falar. Oferece uma hora próxima e pergunta se serve.",
+    };
   });
   res.json(result);
 });
@@ -293,7 +324,7 @@ if (isMain) {
 
 async function main(): Promise<void> {
   await store.init();
-  seedDemoBusiness(store);
+  ensureDemoBusinesses(store);
   app.listen(config.port, () => {
     console.log(`voice-agents listening on ${config.publicBaseUrl}`);
     console.log(
@@ -312,27 +343,4 @@ function isPlan(value: unknown): value is PlanId {
   return value === "base" || value === "pro" || value === "studio";
 }
 
-function seedDemoBusiness(store: Store): void {
-  if (store.listBusinesses().length > 0) {
-    return;
-  }
-  const demo = store.createBusiness({
-    name: "Barbearia Lisboa",
-    useCase: "barbearia",
-    locale: "pt",
-    agentName: "Sofia",
-    agentGender: "feminino",
-    planId: "pro",
-    status: "active",
-    contactEmail: "geral@barbearialisboa.pt",
-  });
-  demo.resources = [
-    { id: demo.resources[0].id, name: "João", transferNumber: "+351910000000", available: true, calUserId: null },
-    { id: randomUUID(), name: "Miguel", transferNumber: "+351920000000", available: false, calUserId: null },
-  ];
-  demo.number = { e164: "+351921234567", provider: "mock", type: "mobile", status: "active", monthlyCostCents: 900 };
-  demo.subscription.status = "trialing";
-  store.saveBusiness(demo);
-}
-
-export { app, store, agent, billing, telephony };
+export { app, store, agent, billing, telephony, MARKETING_DEMO_SLUG };

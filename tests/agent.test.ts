@@ -108,4 +108,20 @@ describe("ConversationManager (PT)", () => {
     const { business } = makeAgent();
     expect(greeting(business)).toContain("ida à barbearia");
   });
+
+  it("clinic greeting offers specialties, not a haircut", () => {
+    const store = tempStore();
+    const business = store.createBusiness({
+      name: "Clínica Teste",
+      useCase: "clinica",
+      locale: "pt",
+      agentName: "Sofia",
+      agentGender: "feminino",
+      planId: "base",
+    });
+    const text = greeting(business);
+    expect(text).toContain("consulta");
+    expect(text).toContain("Dermatologia");
+    expect(text).not.toMatch(/barbearia|corte de cabelo/i);
+  });
 });

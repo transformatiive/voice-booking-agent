@@ -16,12 +16,15 @@ export function checkAvailability(
   now: Date = new Date(),
   resourceId: string | null = null,
 ): AvailabilityResult {
+  if (Number.isNaN(start.getTime()) || Number.isNaN(now.getTime())) {
+    return { ok: false, reason: "past" };
+  }
   if (start.getTime() <= now.getTime()) {
     return { ok: false, reason: "past" };
   }
 
   const day = business.hours[start.getDay()];
-  if (day.open === null || day.close === null) {
+  if (!day || day.open === null || day.close === null) {
     return { ok: false, reason: "closed_day" };
   }
 
@@ -58,8 +61,11 @@ export function suggestSlots(
   now: Date = new Date(),
   limit = 3,
 ): Date[] {
+  if (Number.isNaN(around.getTime())) {
+    return [];
+  }
   const day = business.hours[around.getDay()];
-  if (day.open === null || day.close === null) {
+  if (!day || day.open === null || day.close === null) {
     return [];
   }
   const slots: Date[] = [];
