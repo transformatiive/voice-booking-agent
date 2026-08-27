@@ -193,15 +193,29 @@
                 <span><span class="t">Preços e serviços</span><br /><span class="d">Salão · preços e marcação</span></span>
               </button>
             </div>
-            <div class="ex-panel">
-              <div class="ex-head">
-                <div class="who">
-                  <span class="cc-live"><span class="rec"></span></span>
-                  <span id="exTitle">Marcar hora · Barbearia</span>
-                </div>
-                <div class="mini-wave"><i style="animation-delay:0s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.45s"></i></div>
+            <div class="ex-panel" id="exPanel" data-voice="idle" role="region" aria-label="Exemplo de chamada de voz">
+              <div class="cc-top">
+                <span class="cc-live"><span class="rec"></span> CHAMADA AO VIVO</span>
+                <span id="exTimer">00:00</span>
               </div>
-              <div class="ex-body" id="exBody"></div>
+              <div class="cc-agent">
+                <div class="cc-avatar" id="exAvatar">S</div>
+                <div>
+                  <div class="nm">Sofia</div>
+                  <div class="rl" id="exRole">Assistente de voz</div>
+                </div>
+                <span class="ex-listen" id="exListen">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.5 2.8.6a2 2 0 0 1 1.8 2Z"/></svg>
+                  A ouvir
+                </span>
+              </div>
+              <div class="ex-scene" id="exTitle">Marcar hora · Barbearia</div>
+              <div class="waveform idle" id="exWave" aria-hidden="true"></div>
+              <div class="caption" aria-live="polite">
+                <div class="spk" id="exSpk">A atender…</div>
+                <div class="txt" id="exTxt"></div>
+              </div>
+              <div class="ex-chip" id="exChip" hidden></div>
             </div>
           </div>
         </div>

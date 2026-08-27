@@ -272,36 +272,89 @@ const SCEN = {
 };
 const SCEN_ORDER = ["marcacao", "remarcar", "fora", "precos"];
 let exToken = { cancelled: true };
+let exTimerId = null;
 
 function setActiveTab(key) {
   document.querySelectorAll(".ex-tab").forEach((t) => t.classList.toggle("active", t.dataset.scenario === key));
 }
+
+function fillWave(el) {
+  if (!el || el.childElementCount) return;
+  for (let i = 0; i < 30; i++) {
+    const b = document.createElement("i");
+    b.style.animationDelay = `${(i * 0.045).toFixed(2)}s`;
+    b.style.animationDuration = `${(0.8 + Math.random() * 0.7).toFixed(2)}s`;
+    el.appendChild(b);
+  }
+}
+
+function formatCallClock(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function setExVoice(who) {
+  const panel = document.getElementById("exPanel");
+  const wave = document.getElementById("exWave");
+  const avatar = document.getElementById("exAvatar");
+  const listen = document.getElementById("exListen");
+  const mode = who === "agent" ? "speaking" : who === "client" ? "listening" : "idle";
+  if (panel) panel.dataset.voice = mode;
+  if (wave) wave.className = `waveform ${mode}`;
+  avatar?.classList.toggle("speaking", who === "agent");
+  if (listen) listen.hidden = who === "agent";
+}
+
+function startExTimer(token) {
+  if (exTimerId) clearInterval(exTimerId);
+  const timer = document.getElementById("exTimer");
+  let secs = 0;
+  if (timer) timer.textContent = "00:00";
+  exTimerId = setInterval(() => {
+    if (token.cancelled) { clearInterval(exTimerId); exTimerId = null; return; }
+    secs += 1;
+    if (timer) timer.textContent = formatCallClock(secs);
+  }, 1000);
+}
+
 async function runScenario(key, auto = true) {
   exToken.cancelled = true;
   const token = { cancelled: false };
   exToken = token;
   const sc = SCEN[key];
+  const spk = document.getElementById("exSpk");
+  const txt = document.getElementById("exTxt");
+  const chip = document.getElementById("exChip");
+  const title = document.getElementById("exTitle");
+  fillWave(document.getElementById("exWave"));
   setActiveTab(key);
-  document.getElementById("exTitle").textContent = sc.title;
-  const body = document.getElementById("exBody");
-  body.innerHTML = "";
+  if (title) title.textContent = sc.title;
+  if (chip) { chip.hidden = true; chip.replaceChildren(); }
+  if (spk) { spk.textContent = "A atender…"; spk.removeAttribute("data-who"); }
+  if (txt) txt.textContent = "";
+  setExVoice(null);
+  startExTimer(token);
   for (const [who, text] of sc.lines) {
     if (token.cancelled) return;
-    const line = document.createElement("div");
-    line.className = `cap-line ${who}`;
-    line.innerHTML = `<div class="spk">${who === "agent" ? "Sofia" : "Cliente"}</div><div class="bubble"></div>`;
-    body.appendChild(line);
-    body.scrollTop = body.scrollHeight;
-    await type(line.querySelector(".bubble"), text, token, 20);
-    body.scrollTop = body.scrollHeight;
-    await sleep(560);
+    setExVoice(who);
+    if (spk) {
+      spk.textContent = who === "agent" ? "Sofia · assistente" : "Cliente";
+      spk.dataset.who = who;
+    }
+    if (txt) await type(txt, text, token, 20);
+    await sleep(480);
+    if (token.cancelled) return;
+    setExVoice(null);
+    await sleep(240);
   }
   if (token.cancelled) return;
-  const chip = document.createElement("div");
-  chip.className = "ex-chip";
-  chip.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> ${sc.chip}`;
-  body.appendChild(chip);
-  body.scrollTop = body.scrollHeight;
+  setExVoice(null);
+  if (spk) { spk.textContent = "Chamada"; spk.removeAttribute("data-who"); }
+  if (chip) {
+    chip.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg> ${sc.chip}`;
+    chip.hidden = false;
+  }
   if (!auto) return;
   await sleep(2800);
   if (token.cancelled) return;
@@ -312,12 +365,13 @@ document.querySelectorAll(".ex-tab").forEach((tab) =>
   tab.addEventListener("click", () => runScenario(tab.dataset.scenario, false)));
 
 // Start the examples animation only once it scrolls into view.
-const exBody = document.getElementById("exBody");
-if (exBody) {
+const exPanel = document.getElementById("exPanel");
+if (exPanel) {
+  fillWave(document.getElementById("exWave"));
   const exObs = new IntersectionObserver((entries) => {
     entries.forEach((en) => { if (en.isIntersecting) { exObs.disconnect(); runScenario("marcacao", true); } });
   }, { threshold: 0.3 });
-  exObs.observe(exBody);
+  exObs.observe(exPanel);
 }
 
 document.getElementById("year").textContent = new Date().getFullYear();
