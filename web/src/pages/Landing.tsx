@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { PhoneCallIcon } from "lucide-react";
+import { CheckIcon, PhoneCallIcon, PhoneIcon } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -77,7 +77,7 @@ const FAMILIES = [
     title: "Casa, auto e campo",
     copy: "Oficinas e serviços no terreno: o telefone toca enquanto se trabalha.",
     image:
-      "https://images.unsplash.com/photo-1487754180451-c456f719a1e8?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1200&q=80",
   },
   {
     title: "Serviços profissionais",
@@ -104,7 +104,24 @@ const USE_CASES: Array<{ value: string; label: string }> = [
   { value: "outro", label: "Outro" },
 ];
 
+const TRUSTED_BY = ["Saúde&Vida", "Barber Co.", "Sabor&Cia", "Oficina Total"];
+
+const WAVEFORM = [10, 16, 24, 18, 30, 20, 14, 26, 34, 22, 16, 28, 20, 32, 24, 14, 22, 18, 12];
+
 const CALENDAR_LINE = "Agendamento por voz com marcação no seu Google Calendar.";
+
+const FALLBACK_DID = {
+  e164: "+351210210260",
+  nsn: "210210260",
+  display: "21 021 0260",
+  displayIntl: "+351 21 021 0260",
+  tel: "tel:+351210210260",
+};
+
+function formatHeroDid(nsn: string) {
+  if (nsn.length === 9) return `${nsn.slice(0, 3)} ${nsn.slice(3, 6)} ${nsn.slice(6)}`;
+  return nsn;
+}
 
 export function Landing() {
   const [demo, setDemo] = useState<DemoPayload | null>(null);
@@ -126,13 +143,8 @@ export function Landing() {
   }), []);
 
   const option = demo?.options.find((item) => item.useCase === selectedUseCase) ?? demo?.options[0];
-  const did = demo?.did ?? {
-    e164: "+351210210260",
-    nsn: "210210260",
-    display: "21 021 0260",
-    displayIntl: "+351 21 021 0260",
-    tel: "tel:+351210210260",
-  };
+  const did = demo?.did ?? FALLBACK_DID;
+  const heroDid = formatHeroDid(did.nsn);
 
   useEffect(() => {
     void fetch("/api/demo")
@@ -166,83 +178,73 @@ export function Landing() {
   }
 
   return (
-    <div className="min-h-svh bg-background text-foreground">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
-          <Link to="/" className="font-heading text-lg tracking-tight">
-            Atende
-          </Link>
-          <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            <a href="#demo">Demo</a>
-            <a href="#para-quem">Para quem é</a>
-            <a href="#precos">Preços</a>
-            <a href="#faq">FAQ</a>
-          </nav>
-          <Button onClick={() => setOnboardOpen(true)}>Criar assistente</Button>
-        </div>
-      </header>
-
-      <main>
-        <section className="mx-auto grid max-w-6xl gap-12 px-6 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-          <div className="flex flex-col gap-6">
-            <Badge variant="secondary">Recepcionista de voz para PME em Portugal</Badge>
-            <h1 className="font-heading text-4xl leading-tight tracking-tight md:text-5xl">
-              O telefone toca enquanto se trabalha. O Atende responde.
-            </h1>
-            <p className="max-w-xl text-lg text-muted-foreground">
-              Para qualquer PME onde o telefone toca no meio do serviço — não é um produto só para barbearias.
-              Marcações em português de Portugal, número +351 tratado por nós.
-            </p>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              <span>Número +351 incluído</span>
-              <span aria-hidden="true">·</span>
-              <span>{CALENDAR_LINE}</span>
-              <span aria-hidden="true">·</span>
-              <span>Demo: 21 021 0260</span>
-            </div>
+    <div className="landing">
+      <div className="landing-shell">
+        <header className="landing-header">
+          <div className="landing-header-inner">
+            <Link to="/" className="landing-logo">
+              Atende
+              <span className="landing-logo-dot" aria-hidden="true" />
+            </Link>
+            <nav className="landing-nav">
+              <a href="#produto">Produto</a>
+              <a href="#para-quem">Soluções</a>
+              <a href="#precos">Preços</a>
+              <a href="#faq">Sobre</a>
+            </nav>
+            <button type="button" className="landing-btn landing-btn-primary" onClick={() => setOnboardOpen(true)}>
+              Começar
+              <span aria-hidden="true">→</span>
+            </button>
           </div>
+        </header>
 
-          <Card id="demo" className="border-foreground/10">
-            <CardHeader>
-              <CardTitle>Ligar para ouvir a demo</CardTitle>
-              <CardDescription>
-                Este é o caminho real: chame o número. O Atende pergunta que demonstração quer e entra nesse negócio.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <a
-                href={did.tel}
-                className="flex flex-col gap-2 rounded-xl bg-muted px-5 py-5"
-              >
-                <span className="text-xs tracking-[0.18em] text-muted-foreground uppercase">
-                  Número da demo — ligar para ouvir
+        <section className="landing-hero">
+          <div>
+            <p className="landing-kicker">Recepcionista IA telefónica</p>
+            <h1>Atendimento telefónico com a confiança de uma recepcionista</h1>
+            <p className="landing-lead">
+              Voz IA que atende, qualifica e agenda 24/7. Mais marcações para clínicas, restaurantes
+              e oficinas — menos chamadas perdidas.
+            </p>
+            <div className="landing-hero-ctas">
+              <button type="button" className="landing-btn landing-btn-primary" onClick={() => setOnboardOpen(true)}>
+                Começar
+                <span aria-hidden="true">→</span>
+              </button>
+              <a className="landing-phone-cta" href={did.tel}>
+                <span className="landing-phone-icon">
+                  <PhoneIcon className="size-4" />
                 </span>
-                <span className="font-heading text-4xl tracking-tight md:text-5xl">{did.nsn}</span>
-                <span className="font-heading text-xl tracking-tight">{did.displayIntl}</span>
-                <span className="text-sm text-muted-foreground">
-                  {did.display} · {did.e164} · {did.tel}
+                <span>
+                  Ou ligue <strong>{heroDid}</strong>
                 </span>
               </a>
-              <Button render={<a href={did.tel} />} size="lg" className="w-full">
-                Ligar {did.displayIntl}
-              </Button>
-              <p className="text-sm text-muted-foreground">
-                Ao atender, o Atende pergunta: clínica, barbearia, restaurante, oficina ou imobiliária.
-                Pode dizer o nome ou premir 1 a 5. Cada escolha corre o agente real desse negócio — serviços, agenda e ferramentas.
-              </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+          <HeroProductCards />
         </section>
 
-        <section className="border-y bg-muted/40">
-          <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-14">
-            <div className="flex flex-col gap-2">
-              <h2 className="font-heading text-2xl tracking-tight">Ou fale aqui no browser</h2>
-              <p className="text-muted-foreground">
+        <div className="landing-trust">
+          <p className="landing-trust-label">Confiado por negócios em crescimento</p>
+          <div className="landing-trust-logos">
+            {TRUSTED_BY.map((name) => (
+              <span key={name}>{name}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <main>
+        <section className="landing-section-muted">
+          <div className="landing-section landing-section-compact">
+            <div>
+              <h2 className="landing-section-title">Ou fale aqui no browser</h2>
+              <p className="landing-section-copy">
                 Escolha o caso e inicie a chamada. O mesmo Atende, o mesmo modelo gpt-live-1.
               </p>
             </div>
-            <div className="demo-picker" id="demoPicker" role="tablist" aria-label="Escolher demo">
+            <div className="demo-picker mt-6" id="demoPicker" role="tablist" aria-label="Escolher demo">
               <ToggleGroup
                 value={[selectedUseCase]}
                 onValueChange={(next) => {
@@ -252,82 +254,117 @@ export function Landing() {
                 variant="outline"
                 className="flex flex-wrap"
               >
-              <ToggleGroupItem value="clinica" data-demo-use-case="clinica">
-                Clínica
-              </ToggleGroupItem>
-              <ToggleGroupItem value="barbearia" data-demo-use-case="barbearia">
-                Barbearia
-              </ToggleGroupItem>
-              <ToggleGroupItem value="restaurante" data-demo-use-case="restaurante">
-                Restaurante
-              </ToggleGroupItem>
-              <ToggleGroupItem value="oficina" data-demo-use-case="oficina">
-                Oficina
-              </ToggleGroupItem>
-              <ToggleGroupItem value="imobiliaria" data-demo-use-case="imobiliaria">
-                Imobiliária
-              </ToggleGroupItem>
+                <ToggleGroupItem value="clinica" data-demo-use-case="clinica">
+                  Clínica
+                </ToggleGroupItem>
+                <ToggleGroupItem value="barbearia" data-demo-use-case="barbearia">
+                  Barbearia
+                </ToggleGroupItem>
+                <ToggleGroupItem value="restaurante" data-demo-use-case="restaurante">
+                  Restaurante
+                </ToggleGroupItem>
+                <ToggleGroupItem value="oficina" data-demo-use-case="oficina">
+                  Oficina
+                </ToggleGroupItem>
+                <ToggleGroupItem value="imobiliaria" data-demo-use-case="imobiliaria">
+                  Imobiliária
+                </ToggleGroupItem>
               </ToggleGroup>
             </div>
-            <p className="demo-did text-sm">
+            <p className="demo-did mt-4 text-sm text-[var(--landing-ink-soft)]">
               Ligar <a className="underline underline-offset-4" href="tel:+351210210260">21 021 0260</a>
               {" "}· ou fale aqui no browser
             </p>
-            <Card id="demo-call">
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle>{option?.label ?? "Clínica"}</CardTitle>
-                    <CardDescription>{option?.hint ?? "Marcar consulta"}</CardDescription>
+
+            <div className="mt-8 grid gap-6 lg:grid-cols-2">
+              <Card id="demo" className="ring-0">
+                <CardHeader>
+                  <CardTitle>Ligar para ouvir a demo</CardTitle>
+                  <CardDescription>
+                    Este é o caminho real: chame o número. O Atende pergunta que demonstração quer e entra nesse negócio.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  <a href={did.tel} className="flex flex-col gap-2 rounded-xl bg-[#eef4ff] px-5 py-5">
+                    <span className="text-xs tracking-[0.18em] text-[var(--landing-muted)] uppercase">
+                      Número da demo — ligar para ouvir
+                    </span>
+                    <span className="text-4xl font-semibold tracking-tight md:text-5xl">{did.nsn}</span>
+                    <span className="text-xl tracking-tight">{did.displayIntl}</span>
+                    <span className="text-sm text-[var(--landing-ink-soft)]">
+                      {did.display} · {did.e164} · {did.tel}
+                    </span>
+                  </a>
+                  <a href={did.tel} className="landing-btn landing-btn-primary landing-btn-full">
+                    Ligar {did.displayIntl}
+                  </a>
+                  <p className="text-sm text-[var(--landing-ink-soft)]">
+                    Ao atender, o Atende pergunta: clínica, barbearia, restaurante, oficina ou imobiliária.
+                    Pode dizer o nome ou premir 1 a 5. Cada escolha corre o agente real desse negócio — serviços, agenda e ferramentas.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card id="demo-call" className="ring-0">
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle>{option?.label ?? "Clínica"}</CardTitle>
+                      <CardDescription>{option?.hint ?? "Marcar consulta"}</CardDescription>
+                    </div>
+                    <Badge className="bg-[#e8effc] text-cobalt hover:bg-[#e8effc]">
+                      {phase === "live" ? "Chamada ao vivo" : "Pronto a ligar"}
+                    </Badge>
                   </div>
-                  <Badge variant="secondary">{phase === "live" ? "Chamada ao vivo" : "Pronto a ligar"}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                <div className="rounded-lg bg-muted px-4 py-3">
-                  <p className="text-xs text-muted-foreground">{speaker}</p>
-                  <p>{caption}</p>
-                </div>
-                <Alert>
-                  <PhoneCallIcon />
-                  <AlertTitle>Na chamada telefónica o Atende pergunta o cenário</AlertTitle>
-                  <AlertDescription>
-                    O picker do site muda o agente no browser. Na linha {did.nsn} a escolha faz-se na própria chamada.
-                  </AlertDescription>
-                </Alert>
-              </CardContent>
-              <CardFooter className="flex gap-2">
-                {phase === "live" || phase === "connecting" ? (
-                  <Button variant="destructive" onClick={() => void session.hangup()}>
-                    Terminar
-                  </Button>
-                ) : (
-                  <Button
-                    disabled={phase === "blocked"}
-                    onClick={() => {
-                      if (option) session.setSlug(option.slug);
-                      void session.startCall();
-                    }}
-                  >
-                    Iniciar chamada
-                  </Button>
-                )}
-              </CardFooter>
-            </Card>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  <div className="rounded-lg bg-[#eef4ff] px-4 py-3">
+                    <p className="text-xs text-[var(--landing-muted)]">{speaker}</p>
+                    <p>{caption}</p>
+                  </div>
+                  <Alert>
+                    <PhoneCallIcon />
+                    <AlertTitle>Na chamada telefónica o Atende pergunta o cenário</AlertTitle>
+                    <AlertDescription>
+                      O picker do site muda o agente no browser. Na linha {did.nsn} a escolha faz-se na própria chamada.
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+                <CardFooter className="border-0 bg-transparent">
+                  {phase === "live" || phase === "connecting" ? (
+                    <Button variant="destructive" onClick={() => void session.hangup()}>
+                      Terminar
+                    </Button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="landing-btn landing-btn-primary"
+                      disabled={phase === "blocked"}
+                      onClick={() => {
+                        if (option) session.setSlug(option.slug);
+                        void session.startCall();
+                      }}
+                    >
+                      Iniciar chamada
+                    </button>
+                  )}
+                </CardFooter>
+              </Card>
+            </div>
           </div>
         </section>
 
-        <section id="para-quem" className="mx-auto max-w-6xl px-6 py-16">
-          <div className="flex flex-col gap-3">
-            <h2 className="font-heading text-3xl tracking-tight">Para quem é</h2>
-            <p className="max-w-2xl text-muted-foreground">
+        <section id="para-quem" className="landing-section">
+          <div>
+            <h2 className="landing-section-title">Para quem é</h2>
+            <p className="landing-section-copy">
               Seis famílias de negócio. A demo ao vivo cobre cinco trabalhos concretos — não um catálogo de 50 páginas.
             </p>
           </div>
           <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {FAMILIES.map((family) => (
-              <Card key={family.title}>
-                <img src={family.image} alt="" className="h-44 w-full object-cover" />
+              <Card key={family.title} className="landing-industry ring-0">
+                <img src={family.image} alt="" />
                 <CardHeader>
                   <CardTitle>{family.title}</CardTitle>
                   <CardDescription>{family.copy}</CardDescription>
@@ -337,37 +374,37 @@ export function Landing() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-6xl px-6 py-8">
-          <h2 className="font-heading text-2xl tracking-tight">Como funciona</h2>
-          <ol className="mt-6 grid gap-4 md:grid-cols-4">
-            <li className="flex flex-col gap-2">
-              <span className="text-xs text-muted-foreground">01</span>
-              <h3 className="font-medium">Liga para o +351 que nós tratamos</h3>
-              <p className="text-sm text-muted-foreground">Não há número instantâneo. Pedimos o DID por si.</p>
+        <section id="produto" className="landing-section landing-section-tight">
+          <h2 className="landing-section-title">Como funciona</h2>
+          <ol className="landing-steps">
+            <li>
+              <span>01</span>
+              <h3>Liga para o +351 que nós tratamos</h3>
+              <p>Não há número instantâneo. Pedimos o DID por si.</p>
             </li>
-            <li className="flex flex-col gap-2">
-              <span className="text-xs text-muted-foreground">02</span>
-              <h3 className="font-medium">O Atende atende</h3>
-              <p className="text-sm text-muted-foreground">Percebe o pedido em português de Portugal.</p>
+            <li>
+              <span>02</span>
+              <h3>O Atende atende</h3>
+              <p>Percebe o pedido em português de Portugal.</p>
             </li>
-            <li className="flex flex-col gap-2">
-              <span className="text-xs text-muted-foreground">03</span>
-              <h3 className="font-medium">Consulta a agenda</h3>
-              <p className="text-sm text-muted-foreground">{CALENDAR_LINE}</p>
+            <li>
+              <span>03</span>
+              <h3>Consulta a agenda</h3>
+              <p>{CALENDAR_LINE}</p>
             </li>
-            <li className="flex flex-col gap-2">
-              <span className="text-xs text-muted-foreground">04</span>
-              <h3 className="font-medium">Espera pela aprovação</h3>
-              <p className="text-sm text-muted-foreground">A atribuição fica pendente da aprovação regulatória.</p>
+            <li>
+              <span>04</span>
+              <h3>Espera pela aprovação</h3>
+              <p>A atribuição fica pendente da aprovação regulatória.</p>
             </li>
           </ol>
         </section>
 
-        <section id="precos" className="border-y bg-muted/40">
-          <div className="mx-auto max-w-6xl px-6 py-16">
-            <div className="flex flex-col gap-2">
-              <h2 className="font-heading text-3xl tracking-tight">Preços claros</h2>
-              <p className="max-w-2xl text-muted-foreground">
+        <section id="precos" className="landing-section-muted">
+          <div className="landing-section">
+            <div>
+              <h2 className="landing-section-title">Preços claros</h2>
+              <p className="landing-section-copy">
                 14 dias de teste, 45 minutos, sem cartão. O número próprio só depois da aprovação.
                 200 minutos e +351 incluídos no Essencial — frente aos 75 min e DID instantâneo só nos EUA da Reception Basic.
               </p>
@@ -380,9 +417,9 @@ export function Landing() {
               ] as Plan[]).map((plan) => {
                 const featured = plan.id === "pro";
                 return (
-                  <Card key={plan.id} className={featured ? "ring-foreground/20" : undefined}>
+                  <Card key={plan.id} className={featured ? "ring-2 ring-cobalt/25" : "ring-0"}>
                     <CardHeader>
-                      {featured ? <Badge>Mais escolhido</Badge> : null}
+                      {featured ? <span className="landing-price-note">Mais escolhido</span> : null}
                       <CardTitle>{plan.displayName}</CardTitle>
                       <CardDescription>
                         {(plan.priceCents / 100).toFixed(0)}€ / mês · {plan.includedMinutes} min
@@ -393,17 +430,17 @@ export function Landing() {
                         <p key={feature}>{feature}</p>
                       ))}
                     </CardContent>
-                    <CardFooter>
-                      <Button
-                        variant={featured ? "default" : "outline"}
-                        className="w-full"
+                    <CardFooter className="border-0 bg-transparent">
+                      <button
+                        type="button"
+                        className={`landing-btn landing-btn-full ${featured ? "landing-btn-primary" : "landing-btn-outline"}`}
                         onClick={() => {
                           setPlanId(plan.id);
                           setOnboardOpen(true);
                         }}
                       >
                         Escolher {plan.displayName}
-                      </Button>
+                      </button>
                     </CardFooter>
                   </Card>
                 );
@@ -412,8 +449,8 @@ export function Landing() {
           </div>
         </section>
 
-        <section id="faq" className="mx-auto max-w-3xl px-6 py-16">
-          <h2 className="font-heading text-3xl tracking-tight">Perguntas frequentes</h2>
+        <section id="faq" className="mx-auto max-w-3xl px-7 py-16">
+          <h2 className="landing-section-title">Perguntas frequentes</h2>
           <Accordion className="mt-6">
             <AccordionItem value="demo">
               <AccordionTrigger>Posso ouvir uma demo?</AccordionTrigger>
@@ -439,17 +476,21 @@ export function Landing() {
             </AccordionItem>
           </Accordion>
           <div className="mt-10">
-            <Button size="lg" onClick={() => document.getElementById("demo")?.scrollIntoView({ behavior: "smooth" })}>
+            <button
+              type="button"
+              className="landing-btn landing-btn-primary"
+              onClick={() => document.getElementById("demo")?.scrollIntoView({ behavior: "smooth" })}
+            >
               Ouça a demo
-            </Button>
+            </button>
           </div>
         </section>
       </main>
 
-      <footer className="border-t">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-8 text-sm text-muted-foreground">
-          <span>Atende</span>
-          <div className="flex gap-4">
+      <footer className="landing-footer">
+        <div className="landing-footer-inner">
+          <span className="landing-footer-brand">Atende</span>
+          <div className="landing-footer-links">
             <a href="/privacidade">Privacidade</a>
             <a href="/termos">Termos</a>
             <a href="/dpa">DPA</a>
@@ -458,6 +499,84 @@ export function Landing() {
       </footer>
 
       <OnboardDialog open={onboardOpen} onOpenChange={setOnboardOpen} planId={planId} onPlanChange={setPlanId} />
+    </div>
+  );
+}
+
+function HeroProductCards() {
+  return (
+    <div className="landing-stage" aria-hidden="true">
+      <article className="hero-card hero-card-metrics">
+        <p className="hero-card-label">Chamadas hoje</p>
+        <div className="hero-card-metric-row">
+          <span className="hero-card-metric">128</span>
+          <span className="hero-card-delta">↑ 18% vs. ontem</span>
+        </div>
+        <svg className="hero-spark" viewBox="-4 0 248 72" fill="none" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="heroSparkFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#2563EB" stopOpacity="0.38" />
+              <stop offset="70%" stopColor="#2563EB" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="#2563EB" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M0 50 C28 48 48 42 72 40 C104 36 124 22 152 24 C180 26 204 16 240 12 L240 72 L0 72 Z"
+            fill="url(#heroSparkFill)"
+          />
+          <path
+            d="M0 50 C28 48 48 42 72 40 C104 36 124 22 152 24 C180 26 204 16 240 12"
+            stroke="#2563EB"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="hero-card-metrics-foot">
+          <span>Duração média 02:34</span>
+          <svg className="hero-ring" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="14" fill="none" stroke="#e8eef7" strokeWidth="3.4" />
+            <circle
+              cx="18"
+              cy="18"
+              r="14"
+              fill="none"
+              stroke="#2563EB"
+              strokeWidth="3.4"
+              strokeLinecap="round"
+              strokeDasharray="64 88"
+              transform="rotate(-90 18 18)"
+            />
+          </svg>
+        </div>
+      </article>
+
+      <article className="hero-card hero-card-booking">
+        <div className="hero-card-booking-top">
+          <p className="hero-card-label">Agendamento confirmado</p>
+          <span className="hero-check">
+            <CheckIcon className="size-3.5" />
+          </span>
+        </div>
+        <h3>Consulta agendada</h3>
+        <p>Clínica dermatologia</p>
+        <p>24 de maio · 10:30</p>
+      </article>
+
+      <article className="hero-card hero-card-voice">
+        <div className="hero-card-voice-top">
+          <p className="hero-card-label">Voz IA · activa</p>
+          <span className="hero-live">Ao vivo</span>
+        </div>
+        <div className="hero-wave">
+          {WAVEFORM.map((height, index) => (
+            <i
+              key={`${height}-${index}`}
+              style={{ height: `${height}px`, animationDelay: `${index * 0.06}s` }}
+            />
+          ))}
+        </div>
+        <p>A atender · 01:47</p>
+      </article>
     </div>
   );
 }
