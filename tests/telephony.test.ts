@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MockNumberProvider } from "../src/telephony/mock.js";
 import { TelnyxNumberProvider } from "../src/telephony/telnyx.js";
-import { buildDemoIvrTeXML, buildDemoLiveTeXML, buildIncomingTeXML, handleDemoInbound, handleVoiceFunction } from "../src/telephony/voice.js";
+import { absolutePublicUrl, buildDemoIvrTeXML, buildDemoLiveTeXML, buildIncomingTeXML, handleDemoInbound, handleVoiceFunction } from "../src/telephony/voice.js";
 import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
 import { DEMO_DID_E164, rememberedDemoSlug } from "../src/telephony/demoDid.js";
 import { tempStore } from "./helpers.js";
@@ -56,13 +56,24 @@ describe("voice inbound TeXML", () => {
 
 describe("demo DID inbound TeXML", () => {
   it("asks which demonstration to run with speech and DTMF", () => {
-    const xml = buildDemoIvrTeXML();
+    const xml = buildDemoIvrTeXML("https://atende.pt");
     expect(xml).toContain("<Gather");
     expect(xml).toContain('input="dtmf speech"');
+    expect(xml).toContain('action="https://atende.pt/voice/incoming-demo"');
+    expect(xml).not.toContain('action="/voice/incoming-demo"');
     expect(xml).toContain("clínica, barbearia, restaurante, oficina ou imobiliária");
     expect(xml).toContain("sou o Atende");
     expect(xml).not.toContain("Sofia");
     expect(xml).not.toContain("<Dial");
+  });
+
+  it("builds an absolute Gather action even when PUBLIC_BASE_URL has a trailing slash", () => {
+    expect(absolutePublicUrl("https://atende.pt/", "/voice/incoming-demo")).toBe(
+      "https://atende.pt/voice/incoming-demo",
+    );
+    const xml = buildDemoIvrTeXML("https://atende.pt/");
+    expect(xml).toContain('action="https://atende.pt/voice/incoming-demo"');
+    expect(xml).not.toContain("atende.pt//voice");
   });
 
   it("connects a chosen vertical to Live media, not a human Dial", () => {
@@ -81,6 +92,8 @@ describe("demo DID inbound TeXML", () => {
       publicBaseUrl: "https://atende.pt",
     });
     expect(ivr).toContain("<Gather");
+    expect(ivr).toContain('action="https://atende.pt/voice/incoming-demo"');
+    expect(ivr).not.toContain('action="/voice/incoming-demo"');
     expect(ivr).toContain("sou o Atende");
 
     const dtmf = handleDemoInbound({
