@@ -53,13 +53,21 @@ function raceTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   });
 }
 
-export function buildDemoIvrTeXML(): string {
+/** Telnyx TeXML callbacks require an absolute URL, not a relative path. */
+export function absolutePublicUrl(publicBaseUrl: string, path: string): string {
+  const base = publicBaseUrl.replace(/\/$/, "");
+  const suffix = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${suffix}`;
+}
+
+export function buildDemoIvrTeXML(publicBaseUrl: string): string {
   const prompt =
     "Olá, sou o Atende. Que demonstração quer ouvir: clínica, barbearia, restaurante, oficina ou imobiliária? Pode dizer o nome, ou premir 1 clínica, 2 barbearia, 3 restaurante, 4 oficina, 5 imobiliária.";
+  const action = absolutePublicUrl(publicBaseUrl, "/voice/incoming-demo");
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<Response>`,
-    `  <Gather numDigits="1" timeout="8" action="/voice/incoming-demo" method="POST" input="dtmf speech" language="pt-PT" hints="clínica,barbearia,restaurante,oficina,imobiliária">`,
+    `  <Gather numDigits="1" timeout="8" action="${escapeXml(action)}" method="POST" input="dtmf speech" language="pt-PT" hints="clínica,barbearia,restaurante,oficina,imobiliária">`,
     `    <Say language="pt-PT">${escapeXml(prompt)}</Say>`,
     `  </Gather>`,
     `</Response>`,
@@ -110,7 +118,7 @@ export function handleDemoInbound(opts: {
     now: opts.now,
   });
   if (resolved.kind === "ivr") {
-    return buildDemoIvrTeXML();
+    return buildDemoIvrTeXML(opts.publicBaseUrl);
   }
   rememberDemoChoice({
     slug: resolved.slug,
