@@ -10,6 +10,9 @@ import {
   formatDemoDidNational,
   isDemoDid,
   listDemoOptions,
+  rememberDemoChoice,
+  demoSlugFromSipHeaders,
+  rememberedDemoSlug,
   resolveDemoSlugForInbound,
   useCaseFromSpeech,
 } from "../src/telephony/demoDid.js";
@@ -91,5 +94,20 @@ describe("demo DID and use-case catalog", () => {
       resolveDemoSlugForInbound({ toE164: DEMO_DID_E164, speech: "quero a oficina", now }),
     ).toEqual({ kind: "slug", slug: "oficina-norte" });
     expect(useCaseFromSpeech("imobiliária por favor")).toBe("imobiliaria");
+  });
+
+  it("maps SIP From headers to the vertical chosen on the IVR", () => {
+    const now = 2_000_000;
+    rememberDemoChoice({ slug: "restaurante-baixa", fromE164: "+351910000088", now });
+    expect(
+      demoSlugFromSipHeaders(
+        [{ name: "From", value: '"Ana" <sip:+351910000088@sip.example.com>' }],
+        now,
+      ),
+    ).toBe("restaurante-baixa");
+    expect(
+      demoSlugFromSipHeaders([{ name: "X-Atende-Slug", value: "imobiliaria-baixa" }], now),
+    ).toBe("imobiliaria-baixa");
+    expect(rememberedDemoSlug({ fromE164: "+351910000088", now: now + 31 * 60_000 })).toBeUndefined();
   });
 });

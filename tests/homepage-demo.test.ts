@@ -89,6 +89,10 @@ describe("clinic marketing demo", () => {
     expect(landing).toContain("+351 21 021 0260");
     expect(landing).toContain("+351210210260");
     expect(landing).toContain("tel:+351210210260");
+    expect(landing).toContain("Ligar para ouvir a demo");
+    expect(landing).toContain("did.nsn");
+    expect(landing).toMatch(/pergunta que demonstração|clínica, barbearia, restaurante, oficina ou imobiliária/);
+    expect(landing).toContain("Ou fale aqui no browser");
     expect(landing).toContain("selectedUseCase");
     expect(landing).toContain("/api/demo");
     expect(landing).toContain("Iniciar chamada");

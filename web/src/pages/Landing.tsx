@@ -211,17 +211,21 @@ export function Landing() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <a
-                href="tel:+351210210260"
-                className="flex flex-col gap-1 rounded-xl bg-muted px-5 py-4"
+                href={did.tel}
+                className="flex flex-col gap-2 rounded-xl bg-muted px-5 py-5"
               >
                 <span className="text-xs tracking-[0.18em] text-muted-foreground uppercase">
-                  Número da demo
+                  Número da demo — ligar para ouvir
                 </span>
-                <span className="font-heading text-3xl tracking-tight">{did.displayIntl}</span>
+                <span className="font-heading text-4xl tracking-tight md:text-5xl">{did.nsn}</span>
+                <span className="font-heading text-xl tracking-tight">{did.displayIntl}</span>
                 <span className="text-sm text-muted-foreground">
-                  {did.nsn} · {did.display} · {did.e164}
+                  {did.display} · {did.e164} · {did.tel}
                 </span>
               </a>
+              <Button render={<a href={did.tel} />} size="lg" className="w-full">
+                Ligar {did.displayIntl}
+              </Button>
               <p className="text-sm text-muted-foreground">
                 Ao atender, o Atende pergunta: clínica, barbearia, restaurante, oficina ou imobiliária.
                 Pode dizer o nome ou premir 1 a 5. Cada escolha corre o agente real desse negócio — serviços, agenda e ferramentas.

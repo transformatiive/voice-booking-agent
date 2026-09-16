@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { MockNumberProvider } from "../src/telephony/mock.js";
 import { TelnyxNumberProvider } from "../src/telephony/telnyx.js";
-import { buildDemoIvrTeXML, buildDemoLiveTeXML, buildIncomingTeXML, handleVoiceFunction } from "../src/telephony/voice.js";
+import { buildDemoIvrTeXML, buildDemoLiveTeXML, buildIncomingTeXML, handleDemoInbound, handleVoiceFunction } from "../src/telephony/voice.js";
 import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
+import { DEMO_DID_E164, rememberedDemoSlug } from "../src/telephony/demoDid.js";
 import { tempStore } from "./helpers.js";
 
 const NOW = new Date(2026, 7, 26, 9, 0, 0);
@@ -70,6 +71,52 @@ describe("demo DID inbound TeXML", () => {
     expect(xml).toContain("oficina-norte");
     expect(xml).not.toContain("<Dial");
     expect(xml).not.toMatch(/<Say[^>]*>a ligar/);
+  });
+
+  it("asks first, then streams the live vertical from speech or DTMF", () => {
+    const ivr = handleDemoInbound({
+      toE164: DEMO_DID_E164,
+      fromE164: "+351910000044",
+      now: 3_000_000,
+      publicBaseUrl: "https://atende.pt",
+    });
+    expect(ivr).toContain("<Gather");
+    expect(ivr).toContain("sou o Atende");
+
+    const dtmf = handleDemoInbound({
+      toE164: DEMO_DID_E164,
+      fromE164: "+351910000044",
+      digits: "4",
+      now: 3_000_000,
+      publicBaseUrl: "https://atende.pt",
+    });
+    expect(dtmf).toContain("oficina-norte");
+    expect(dtmf).toContain("<Stream");
+    expect(rememberedDemoSlug({ fromE164: "+351910000044", now: 3_000_000 })).toBe("oficina-norte");
+
+    const speech = handleDemoInbound({
+      toE164: DEMO_DID_E164,
+      fromE164: "+351910000055",
+      speech: "quero a imobiliária",
+      now: 3_000_000,
+      publicBaseUrl: "https://atende.pt",
+    });
+    expect(speech).toContain("imobiliaria-baixa");
+  });
+
+  it("dials OpenAI SIP after the caller picks a vertical", () => {
+    const xml = handleDemoInbound({
+      toE164: DEMO_DID_E164,
+      fromE164: "+351910000066",
+      digits: "3",
+      now: 4_000_000,
+      publicBaseUrl: "https://atende.pt",
+      sipUri: "sip:proj_test@sip.api.openai.com;transport=tls",
+    });
+    expect(xml).toContain("<Sip>");
+    expect(xml).toContain("sip:proj_test@sip.api.openai.com");
+    expect(xml).not.toContain("<Stream");
+    expect(rememberedDemoSlug({ fromE164: "+351910000066", now: 4_000_000 })).toBe("restaurante-baixa");
   });
 });
 

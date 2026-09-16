@@ -121,6 +121,67 @@ export function boundSlugForCaller(callerE164: string, now: number): string | un
   return undefined;
 }
 
+const rememberedByCaller = new Map<string, CallerBind>();
+const rememberedByCall = new Map<string, CallerBind>();
+const CHOICE_TTL_MS = 30 * 60 * 1000;
+
+export function rememberDemoChoice(opts: {
+  slug: string;
+  fromE164?: string;
+  callSid?: string;
+  now: number;
+}): void {
+  const expiresAt = opts.now + CHOICE_TTL_MS;
+  const bind = { slug: opts.slug, expiresAt };
+  if (opts.fromE164) {
+    const caller = normalizeE164(opts.fromE164);
+    if (caller) rememberedByCaller.set(caller, bind);
+  }
+  if (opts.callSid?.trim()) {
+    rememberedByCall.set(opts.callSid.trim(), bind);
+  }
+}
+
+export function rememberedDemoSlug(opts: {
+  fromE164?: string;
+  callSid?: string;
+  now: number;
+}): string | undefined {
+  if (opts.callSid) {
+    const byCall = rememberedByCall.get(opts.callSid.trim());
+    if (byCall && byCall.expiresAt > opts.now) return byCall.slug;
+  }
+  if (opts.fromE164) {
+    const byCaller = rememberedByCaller.get(normalizeE164(opts.fromE164));
+    if (byCaller && byCaller.expiresAt > opts.now) return byCaller.slug;
+  }
+  return undefined;
+}
+
+export interface SipHeader {
+  name: string;
+  value: string;
+}
+
+export function isDemoSlug(slug: string): boolean {
+  return OPTIONS.some((option) => option.slug === slug);
+}
+
+export function e164FromSipValue(value: string): string | undefined {
+  const match = value.match(/\+\d{8,15}/);
+  return match ? normalizeE164(match[0]) : undefined;
+}
+
+export function demoSlugFromSipHeaders(headers: SipHeader[], now: number): string | undefined {
+  const slugHeader = headers.find((header) => /^(x-atende-slug|x-demo-slug)$/i.test(header.name));
+  if (slugHeader && isDemoSlug(slugHeader.value.trim())) {
+    return slugHeader.value.trim();
+  }
+  const from = headers.find((header) => /^from$/i.test(header.name))?.value;
+  const fromE164 = from ? e164FromSipValue(from) : undefined;
+  return rememberedDemoSlug({ fromE164, now });
+}
+
 export function resolveDemoSlugForInbound(opts: {
   toE164: string;
   fromE164?: string;

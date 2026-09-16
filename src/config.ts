@@ -64,6 +64,8 @@ export const config = {
     },
     openaiLiveBackendModel: env("OPENAI_LIVE_BACKEND_MODEL") ?? "gpt-5.6-terra",
     opsApproveSecret: env("OPS_APPROVE_SECRET"),
+    /** After demo IVR, Dial this SIP URI (ops: sip:$PROJECT_ID@sip.api.openai.com;transport=tls). */
+    openaiLiveSipUri: env("OPENAI_LIVE_SIP_URI"),
   },
 
   demoDidE164: env("DEMO_DID_E164") ?? "+351210210260",

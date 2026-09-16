@@ -13,8 +13,13 @@ import { createScheduler } from "./scheduling/index.js";
 import { ConversationManager, greeting } from "./agent/conversation.js";
 import { BillingService } from "./billing/stripe.js";
 import { TelephonyService } from "./telephony/index.js";
-import { buildDemoIvrTeXML, buildDemoLiveTeXML, buildIncomingTeXML, handleVoiceFunction } from "./telephony/voice.js";
-import { buildLiveSessionConfig, createLiveWebRtcSession, parseToolArguments } from "./telephony/gptLive.js";
+import { buildIncomingTeXML, handleDemoInbound, handleVoiceFunction } from "./telephony/voice.js";
+import {
+  acceptLiveIncomingCall,
+  createLiveWebRtcSession,
+  parseLiveIncomingWebhook,
+  parseToolArguments,
+} from "./telephony/gptLive.js";
 import {
   DEMO_DID_DISPLAY,
   DEMO_DID_DISPLAY_INTL,
@@ -22,10 +27,12 @@ import {
   DEMO_DID_NSN,
   DEMO_DID_TEL,
   bindDemoCaller,
+  demoSlugFromSipHeaders,
   demoSlugForUseCase,
   isDemoDid,
+  isDemoSlug,
   listDemoOptions,
-  resolveDemoSlugForInbound,
+  rememberedDemoSlug,
 } from "./telephony/demoDid.js";
 import { consumeSessionQuota } from "./telephony/sessionLimit.js";
 import { MARKETING_DEMO_SLUG, ensureDemoBusinesses } from "./store/seed.js";
@@ -332,18 +339,45 @@ app.post("/api/business/:slug/realtime/tool", async (req, res) => {
   }
 });
 
-app.post("/v1/live/sessions/:id/accept", (req, res) => {
-  if (!config.voice.openaiApiKey) {
-    res.status(503).json({ error: "gpt_live_not_configured" });
+async function handleLiveSipIncoming(req: Request, res: Response): Promise<void> {
+  const parsed = parseLiveIncomingWebhook(req.body, req.params.id);
+  if (!parsed) {
+    res.status(400).json({ error: "session_required" });
     return;
   }
-  const slug = typeof req.body?.slug === "string" ? req.body.slug : MARKETING_DEMO_SLUG;
+  const now = Date.now();
+  const bodySlug = typeof req.body?.slug === "string" ? req.body.slug.trim() : "";
+  const slug =
+    (bodySlug && isDemoSlug(bodySlug) ? bodySlug : undefined) ||
+    demoSlugFromSipHeaders(parsed.sipHeaders, now) ||
+    rememberedDemoSlug({
+      fromE164: typeof req.body?.from === "string" ? req.body.from : undefined,
+      callSid: typeof req.body?.CallSid === "string" ? req.body.CallSid : undefined,
+      now,
+    });
+  if (!slug) {
+    res.status(409).json({ error: "demo_vertical_required" });
+    return;
+  }
   const business = store.getBusinessBySlug(slug);
   if (!business) {
     res.status(404).json({ error: "business_not_found" });
     return;
   }
-  res.json({ session: buildLiveSessionConfig(business) });
+  const result = await acceptLiveIncomingCall({
+    sessionId: parsed.sessionId,
+    business,
+    apiKey: config.voice.openaiApiKey,
+  });
+  res.status(result.status).json(result.body);
+}
+
+app.post("/voice/openai-live", (req, res) => {
+  void handleLiveSipIncoming(req, res);
+});
+
+app.post("/v1/live/sessions/:id/accept", (req, res) => {
+  void handleLiveSipIncoming(req, res);
 });
 
 function demoInboundXml(req: Request): string {
@@ -351,17 +385,17 @@ function demoInboundXml(req: Request): string {
   const from = String(req.body?.From ?? req.body?.from ?? "");
   const digits = String(req.body?.Digits ?? req.body?.digits ?? "");
   const speech = String(req.body?.SpeechResult ?? req.body?.speech ?? "");
-  const resolved = resolveDemoSlugForInbound({
+  const callSid = String(req.body?.CallSid ?? req.body?.call_sid ?? req.body?.callSid ?? "");
+  return handleDemoInbound({
     toE164: to || DEMO_DID_E164,
     fromE164: from || undefined,
     digits: digits.trim() || undefined,
     speech: speech.trim() || undefined,
+    callSid: callSid.trim() || undefined,
     now: Date.now(),
+    publicBaseUrl: config.publicBaseUrl,
+    sipUri: config.voice.openaiLiveSipUri,
   });
-  if (resolved.kind === "ivr") {
-    return buildDemoIvrTeXML();
-  }
-  return buildDemoLiveTeXML({ slug: resolved.slug, publicBaseUrl: config.publicBaseUrl });
 }
 
 app.post("/voice/incoming-demo", (req, res) => {

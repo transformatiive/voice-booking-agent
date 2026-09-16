@@ -4,8 +4,10 @@ import type { AddressInfo } from "node:net";
 import {
   LIVE_BACKEND_MODEL_DEFAULT,
   LIVE_VOICE_MODEL,
+  acceptLiveIncomingCall,
   buildLiveSessionConfig,
   createLiveWebRtcSession,
+  parseLiveIncomingWebhook,
   parseToolArguments,
 } from "../src/telephony/gptLive.js";
 import { handleVoiceFunction } from "../src/telephony/voice.js";
@@ -47,6 +49,57 @@ describe("gpt-live-1 session config", () => {
     expect(names.sort()).toEqual(
       ["book_appointment", "cancel_appointment", "get_slots", "list_bookings", "list_services"].sort(),
     );
+    expect(session.type).toBe("live");
+  });
+
+  it("each picker vertical gets that tenant's live agent, not a demo script", () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const oficina = store.getBusinessBySlug("oficina-norte")!;
+    const oficinaSession = buildLiveSessionConfig(oficina);
+    expect(String(oficinaSession.instructions)).toMatch(/Oficina Norte/);
+    expect(String(oficinaSession.instructions)).toMatch(/Diagnóstico/);
+    expect(String(oficinaSession.instructions)).toMatch(/balcão da oficina/);
+    expect(String(oficinaSession.instructions)).not.toMatch(/isto é uma demonstração|sou uma demo/i);
+    expect(String(oficinaSession.instructions)).not.toMatch(/conselhos médicos/);
+
+    const restaurante = store.getBusinessBySlug("restaurante-baixa")!;
+    expect(String(buildLiveSessionConfig(restaurante).instructions)).toMatch(/reservas de mesa/);
+    expect(String(buildLiveSessionConfig(restaurante).instructions)).toMatch(/Restaurante Baixa/);
+
+    const imobiliaria = store.getBusinessBySlug("imobiliaria-baixa")!;
+    expect(String(buildLiveSessionConfig(imobiliaria).instructions)).toMatch(/visitas e avaliações/);
+  });
+
+  it("SIP accept uses the chosen vertical and never leaks the API key", async () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const oficina = store.getBusinessBySlug("oficina-norte")!;
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(String(url)).toContain("/v1/live/sessions/sess_oficina/accept");
+      const body = JSON.parse(String(init?.body)) as { session: { instructions: string; model: string } };
+      expect(body.session.model).toBe("gpt-live-1");
+      expect(body.session.instructions).toMatch(/Oficina Norte/);
+      return new Response(null, { status: 200 });
+    });
+    const result = await acceptLiveIncomingCall({
+      sessionId: "sess_oficina",
+      business: oficina,
+      apiKey: "sk-live-secret",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.slug).toBe("oficina-norte");
+    expect(JSON.stringify(result.body)).not.toContain("sk-live-secret");
+
+    const parsed = parseLiveIncomingWebhook({
+      type: "live.transport.incoming",
+      data: {
+        session_id: "sess_oficina",
+        sip_headers: [{ name: "From", value: "sip:+351910000066@sip.example.com" }],
+      },
+    });
+    expect(parsed?.sessionId).toBe("sess_oficina");
   });
 
   it("posts SDP to /v1/live/sessions and never returns the API key", async () => {

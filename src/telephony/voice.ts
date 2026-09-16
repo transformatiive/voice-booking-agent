@@ -11,7 +11,7 @@ import {
 } from "../scheduling/voiceSlots.js";
 import { isVoiceDemoSlug } from "../store/seed.js";
 import { DEFAULT_AGENT_NAME } from "../domain/agent.js";
-import { demoStreamUrl } from "./demoDid.js";
+import { demoStreamUrl, rememberDemoChoice, resolveDemoSlugForInbound } from "./demoDid.js";
 
 /** Never let a Cal.com (or other) hop block the voice tool loop. */
 export const VOICE_TOOL_TIMEOUT_MS = 1_500;
@@ -66,7 +66,21 @@ export function buildDemoIvrTeXML(): string {
   ].join("\n");
 }
 
-export function buildDemoLiveTeXML(opts: { slug: string; publicBaseUrl: string }): string {
+export function buildDemoLiveTeXML(opts: {
+  slug: string;
+  publicBaseUrl: string;
+  sipUri?: string;
+}): string {
+  if (opts.sipUri) {
+    return [
+      `<?xml version="1.0" encoding="UTF-8"?>`,
+      `<Response>`,
+      `  <Dial>`,
+      `    <Sip>${escapeXml(opts.sipUri)}</Sip>`,
+      `  </Dial>`,
+      `</Response>`,
+    ].join("\n");
+  }
   const streamUrl = demoStreamUrl(opts.publicBaseUrl, opts.slug);
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
@@ -76,6 +90,39 @@ export function buildDemoLiveTeXML(opts: { slug: string; publicBaseUrl: string }
     `  </Connect>`,
     `</Response>`,
   ].join("\n");
+}
+
+export function handleDemoInbound(opts: {
+  toE164: string;
+  fromE164?: string;
+  digits?: string;
+  speech?: string;
+  callSid?: string;
+  now: number;
+  publicBaseUrl: string;
+  sipUri?: string;
+}): string {
+  const resolved = resolveDemoSlugForInbound({
+    toE164: opts.toE164,
+    fromE164: opts.fromE164,
+    digits: opts.digits,
+    speech: opts.speech,
+    now: opts.now,
+  });
+  if (resolved.kind === "ivr") {
+    return buildDemoIvrTeXML();
+  }
+  rememberDemoChoice({
+    slug: resolved.slug,
+    fromE164: opts.fromE164,
+    callSid: opts.callSid,
+    now: opts.now,
+  });
+  return buildDemoLiveTeXML({
+    slug: resolved.slug,
+    publicBaseUrl: opts.publicBaseUrl,
+    sipUri: opts.sipUri,
+  });
 }
 
 /**
