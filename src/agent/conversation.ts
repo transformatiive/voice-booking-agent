@@ -1,4 +1,5 @@
-import type { Booking, Business, BookingSource, Locale, Service } from "../domain/types.js";
+import type { Booking, Business, BookingSource, Locale, Service, UseCase } from "../domain/types.js";
+import { DEFAULT_AGENT_NAME } from "../domain/agent.js";
 import type { Store } from "../store/store.js";
 import type { Scheduler } from "../scheduling/scheduler.js";
 import { checkAvailability, suggestSlots } from "../scheduling/availability.js";
@@ -392,18 +393,52 @@ function firstAvailableResource(business: Business): string | null {
 }
 
 export function greeting(business: Business): string {
-  const L = business.locale;
-  const agent = business.agentName || (L === "en" ? "the assistant" : "o assistente");
+  const agent = business.agentName || DEFAULT_AGENT_NAME;
   const offered = servicesSentence(business);
-  if (L === "pt") {
-    if (business.useCase === "clinica") {
-      return `Olá! Sou ${agent} da ${business.name}. Posso marcar a sua consulta. Temos: ${offered}. Que especialidade pretende?`;
+  const lines = greetingLines(business.useCase, business.locale);
+  if (business.locale === "pt") {
+    return `Olá! Sou ${agent} da ${business.name}. ${lines.offer} Temos: ${offered}. ${lines.ask}`;
+  }
+  return `Hi! I'm ${agent} at ${business.name}. ${lines.offer} We offer: ${offered}. ${lines.ask}`;
+}
+
+function greetingLines(useCase: UseCase, locale: Locale): { offer: string; ask: string } {
+  switch (useCase) {
+    case "clinica":
+      return locale === "pt"
+        ? { offer: "Posso marcar a sua consulta.", ask: "Que especialidade pretende?" }
+        : { offer: "I can book your consultation.", ask: "Which specialty would you like?" };
+    case "barbearia":
+      return locale === "pt"
+        ? { offer: "Posso marcar a sua ida à barbearia.", ask: "O que pretende?" }
+        : { offer: "I can book your barbershop visit.", ask: "What would you like?" };
+    case "salao":
+      return locale === "pt"
+        ? { offer: "Posso marcar a sua ida ao salão.", ask: "O que pretende?" }
+        : { offer: "I can book your salon visit.", ask: "What would you like?" };
+    case "restaurante":
+      return locale === "pt"
+        ? { offer: "Posso tratar da sua reserva de mesa.", ask: "Para quantas pessoas e a que horas?" }
+        : { offer: "I can take your table reservation.", ask: "For how many people, and what time?" };
+    case "oficina":
+      return locale === "pt"
+        ? { offer: "Posso marcar diagnóstico, revisão ou pneus.", ask: "De que serviço precisa?" }
+        : { offer: "I can book a diagnosis, service, or tyres.", ask: "What do you need?" };
+    case "imobiliaria":
+      return locale === "pt"
+        ? { offer: "Posso marcar a sua visita ao imóvel.", ask: "Que imóvel ou zona procura?" }
+        : { offer: "I can book your property viewing.", ask: "Which property or area are you looking at?" };
+    case "ginasio":
+      return locale === "pt"
+        ? { offer: "Posso marcar a sua aula experimental.", ask: "Que aula pretende?" }
+        : { offer: "I can book your trial class.", ask: "Which class would you like?" };
+    case "outro":
+      return locale === "pt"
+        ? { offer: "Posso tratar da sua marcação.", ask: "O que pretende?" }
+        : { offer: "I can book your appointment.", ask: "What would you like?" };
+    default: {
+      const exhaustive: never = useCase;
+      throw new Error(`Unknown use case: ${String(exhaustive)}`);
     }
-    const what = business.useCase === "barbearia" ? "ida à barbearia" : "marcação";
-    return `Olá! Sou ${agent} da ${business.name}. Posso marcar a sua ${what}. Temos: ${offered}. O que pretende?`;
   }
-  if (business.useCase === "clinica") {
-    return `Hi! I'm ${agent} at ${business.name}. I can book your consultation. We offer: ${offered}. Which specialty would you like?`;
-  }
-  return `Hi! I'm ${agent} at ${business.name}. I can book your appointment. We offer: ${offered}. What would you like?`;
 }

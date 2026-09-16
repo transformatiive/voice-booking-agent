@@ -11,7 +11,7 @@ function makeBusiness() {
     name: "Barbearia Teste",
     useCase: "barbearia",
     locale: "pt",
-    agentName: "Sofia",
+    agentName: "Atende",
     agentGender: "feminino",
     planId: "base",
   });

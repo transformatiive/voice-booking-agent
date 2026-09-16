@@ -30,6 +30,14 @@ export class TelephonyService {
     return this.provider.name;
   }
 
+  markNumberApproved(business: Business): void {
+    if (!business.number) {
+      return;
+    }
+    business.number = { ...business.number, status: "active" };
+    this.store.saveBusiness(business);
+  }
+
   async provisionForBusiness(
     business: Business,
     type: NumberType = "mobile",

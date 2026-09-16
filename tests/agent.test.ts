@@ -12,7 +12,7 @@ function makeAgent(locale: "pt" | "en" = "pt") {
     name: "Barbearia Teste",
     useCase: "barbearia",
     locale,
-    agentName: "Sofia",
+    agentName: "Atende",
     agentGender: "feminino",
     planId: "base",
   });
@@ -115,7 +115,7 @@ describe("ConversationManager (PT)", () => {
       name: "Clínica Teste",
       useCase: "clinica",
       locale: "pt",
-      agentName: "Sofia",
+      agentName: "Atende",
       agentGender: "feminino",
       planId: "base",
     });
@@ -123,5 +123,29 @@ describe("ConversationManager (PT)", () => {
     expect(text).toContain("consulta");
     expect(text).toContain("Dermatologia");
     expect(text).not.toMatch(/barbearia|corte de cabelo/i);
+  });
+
+  it("each live vertical greets as that business, not a demo monologue", () => {
+    const store = tempStore();
+    const cases: Array<{ useCase: "restaurante" | "oficina" | "imobiliaria"; needle: RegExp }> = [
+      { useCase: "restaurante", needle: /reserva de mesa/i },
+      { useCase: "oficina", needle: /diagnóstico|revisão/i },
+      { useCase: "imobiliaria", needle: /visita ao imóvel/i },
+    ];
+    for (const item of cases) {
+      const business = store.createBusiness({
+        name: `Negócio ${item.useCase}`,
+        useCase: item.useCase,
+        locale: "pt",
+        agentName: "Atende",
+        agentGender: "neutro",
+        planId: "base",
+      });
+      const text = greeting(business);
+      expect(text).toMatch(item.needle);
+      expect(text).toContain("Atende");
+      expect(text).not.toMatch(/isto é uma demo|demonstração/i);
+      expect(text).not.toMatch(/ida à barbearia/);
+    }
   });
 });

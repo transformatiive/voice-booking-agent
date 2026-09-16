@@ -2,9 +2,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { defaultServices } from "../src/domain/catalog.js";
 import { greeting } from "../src/agent/conversation.js";
-import { buildGrokInstructions, buildGrokSessionConfig } from "../src/telephony/grokRealtime.js";
+import { buildLiveInstructions, buildLiveSessionConfig, LIVE_VOICE_MODEL } from "../src/telephony/gptLive.js";
 import { ensureDemoBusinesses, MARKETING_DEMO_SLUG, LEGACY_BARBER_DEMO_SLUG } from "../src/store/seed.js";
+import { PLANS } from "../src/domain/plans.js";
 import { tempStore } from "./helpers.js";
+import { DEFAULT_AGENT_NAME } from "../src/domain/agent.js";
+
+function readWeb(path: string): string {
+  return readFileSync(new URL(`../web/src/${path}`, import.meta.url), "utf8");
+}
 
 describe("clinic marketing demo", () => {
   it("defaults clinic services to Portuguese specialties, not a barbershop", () => {
@@ -19,8 +25,8 @@ describe("clinic marketing demo", () => {
       name: "Barbearia Lisboa",
       useCase: "barbearia",
       locale: "pt",
-      agentName: "Sofia",
-      agentGender: "feminino",
+      agentName: DEFAULT_AGENT_NAME,
+      agentGender: "neutro",
       planId: "pro",
       status: "active",
     });
@@ -30,6 +36,7 @@ describe("clinic marketing demo", () => {
     expect(clinic).toBeDefined();
     expect(clinic?.useCase).toBe("clinica");
     expect(clinic?.name).toBe("Clínica Central");
+    expect(clinic?.agentName).toBe(DEFAULT_AGENT_NAME);
     expect(clinic?.services.map((s) => s.name)).toEqual([
       "Clínica geral",
       "Dermatologia",
@@ -46,68 +53,103 @@ describe("clinic marketing demo", () => {
     expect(store.getBusinessBySlug(LEGACY_BARBER_DEMO_SLUG)?.useCase).toBe("barbearia");
   });
 
-  it("clinic greeting and Grok instructions book consultations without medical advice", () => {
+  it("clinic greeting and Live instructions book consultations without medical advice", () => {
     const store = tempStore();
     ensureDemoBusinesses(store);
     const clinic = store.getBusinessBySlug(MARKETING_DEMO_SLUG)!;
     const hello = greeting(clinic);
     expect(hello).toMatch(/consulta/i);
     expect(hello).toMatch(/especialidade/i);
+    expect(hello).toContain(DEFAULT_AGENT_NAME);
     expect(hello).not.toMatch(/barbearia|corte/i);
+    expect(hello).not.toMatch(/Sofia/);
 
-    const instructions = buildGrokInstructions(clinic);
+    const instructions = buildLiveInstructions(clinic);
     expect(instructions).toMatch(/português de Portugal/);
     expect(instructions).toMatch(/Nunca dês conselhos médicos/);
     expect(instructions).toMatch(/SMS/);
     expect(instructions).toMatch(/especialidade/);
     expect(instructions).toMatch(/Assim que uma ferramenta devolver/);
     expect(instructions).toMatch(/a começar/);
+    expect(instructions).toContain(DEFAULT_AGENT_NAME);
     expect(instructions).not.toMatch(/corte de cabelo|barba/i);
+    expect(instructions).not.toMatch(/Sofia|Grok/);
 
-    const session = buildGrokSessionConfig(clinic);
-    const vad = session.turn_detection as { type: string; threshold: number };
-    expect(vad.type).toBe("server_vad");
-    expect(vad.threshold).toBeLessThan(0.6);
-    const audio = session.audio as { input: { transcription: { language_hint: string } } };
-    expect(audio.input.transcription.language_hint).toBe("pt-PT");
+    const session = buildLiveSessionConfig(clinic);
+    expect(session.model).toBe("gpt-live-1");
+    expect(LIVE_VOICE_MODEL).toBe("gpt-live-1");
   });
 
-  it("homepage is the live demo: no /demo navigation, clinic card on /", () => {
-    const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-    const js = readFileSync(new URL("../public/landing.js", import.meta.url), "utf8");
-    expect(html).not.toContain("/demo/barbearia-lisboa");
-    expect(html).not.toMatch(/href="\/demo\//);
-    expect(html).toContain('id="demo-call"');
-    expect(html).toContain("Iniciar chamada");
-    expect(html).toContain("consulta de dermatologia");
-    expect(html).toContain("CHAMADA AO VIVO");
-    expect(html).toContain("/voice-call.js");
-    expect(js).toContain("heroSession.startCall");
-    expect(js).not.toContain("/demo/barbearia");
+  it("homepage picker lists use-cases and the demo DID", () => {
+    const landing = readWeb("pages/Landing.tsx");
+    const voice = readWeb("lib/voice-call.ts");
+    expect(landing).toContain("data-demo-use-case");
+    expect(landing).toContain("210210260");
+    expect(landing).toContain("21 021 0260");
+    expect(landing).toContain("+351 21 021 0260");
+    expect(landing).toContain("+351210210260");
+    expect(landing).toContain("tel:+351210210260");
+    expect(landing).toContain("Ligar para ouvir a demo");
+    expect(landing).toContain("did.nsn");
+    expect(landing).toMatch(/pergunta que demonstração|clínica, barbearia, restaurante, oficina ou imobiliária/);
+    expect(landing).toContain("Ou fale aqui no browser");
+    expect(landing).toContain("selectedUseCase");
+    expect(landing).toContain("/api/demo");
+    expect(landing).toContain("Iniciar chamada");
+    expect(landing).not.toMatch(/href="\/demo\//);
+    expect(landing).not.toContain("Sofia");
+    expect(landing).not.toMatch(/Grok/);
+    expect(voice).toContain("flushPendingTools");
+    expect(voice).toContain('sendEvent({ type: "response.create" })');
+    expect(voice).not.toMatch(/Grok|Sofia/);
   });
 
   it("customer-facing homepage copy uses Google Calendar, not Cal.com", () => {
-    const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-    const js = readFileSync(new URL("../public/landing.js", import.meta.url), "utf8");
-    const termos = readFileSync(new URL("../public/termos.html", import.meta.url), "utf8");
-    const privacidade = readFileSync(new URL("../public/privacidade.html", import.meta.url), "utf8");
-    const dpa = readFileSync(new URL("../public/dpa.html", import.meta.url), "utf8");
-    for (const copy of [html, js, termos, privacidade, dpa]) {
-      expect(copy).not.toMatch(/cal\.com/i);
-    }
-    expect(html).toContain("Vê horas livres e conflitos na agenda Google, em tempo real.");
-    expect(html).toContain("A agenda continua no Google.");
-    expect(js).toMatch(/Google Calendar do negócio/);
-    expect(js).toMatch(/conflitos e sobreposições/);
+    const landing = readWeb("pages/Landing.tsx");
+    expect(landing).not.toMatch(/cal\.com/i);
+    expect(landing).toContain("Agendamento por voz com marcação no seu Google Calendar.");
+    expect(landing).not.toMatch(/evita conflitos e sobreposições/);
+    expect(landing).not.toMatch(/adesão em minutos/i);
   });
 
-  it("voice client requests a follow-up after tools so Sofia does not stall", () => {
-    const js = readFileSync(new URL("../public/voice-call.js", import.meta.url), "utf8");
+  it("presents six industry families and 49/99/199 with trial copy", () => {
+    const landing = readWeb("pages/Landing.tsx");
+    expect(landing).toContain("Saúde");
+    expect(landing).toContain("Beleza e bem-estar");
+    expect(landing).toContain("Restauração e hotelaria");
+    expect(landing).toContain("Casa, auto e campo");
+    expect(landing).toContain("Serviços profissionais");
+    expect(landing).toContain("Fitness e formação");
+    expect(landing).toContain("Essencial");
+    expect(landing).toContain("Estúdio");
+    expect(landing).toContain("14 dias");
+    expect(landing).toContain("45 minutos");
+    expect(PLANS.base.displayName).toBe("Essencial");
+    expect(PLANS.studio.displayName).toBe("Estúdio");
+    expect(landing).toMatch(/data-demo-use-case="clinica"/);
+    expect(landing).toMatch(/data-demo-use-case="barbearia"/);
+    expect(landing).toMatch(/data-demo-use-case="restaurante"/);
+    expect(landing).toMatch(/data-demo-use-case="oficina"/);
+    expect(landing).toMatch(/data-demo-use-case="imobiliaria"/);
+  });
+
+  it("voice client requests a follow-up after tools so Atende does not stall", () => {
+    const js = readWeb("lib/voice-call.ts");
     expect(js).toContain("async function flushPendingTools");
     expect(js).toMatch(/if \(pendingTools\.size\) return;/);
     expect(js).not.toMatch(/if \(!pendingTools\.size\) return;/);
     expect(js).toContain('sendEvent({ type: "response.create" })');
     expect(js).toContain("TOOL_TIMEOUT_MS");
     expect(js).toContain("AbortController");
+  });
+
+  it("backoffice uses shadcn Select and gpt-live-1, not native select or Grok", () => {
+    const app = readWeb("pages/Backoffice.tsx");
+    expect(app).toContain("ChatGPT Live (gpt-live-1)");
+    expect(app).toContain("SelectTrigger");
+    expect(app).not.toMatch(/<select/);
+    expect(app).not.toMatch(/Grok|Sofia/);
+    const landing = readWeb("pages/Landing.tsx");
+    expect(landing).not.toMatch(/<select/);
   });
 });
