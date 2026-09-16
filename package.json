@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --exclude './web/**' --exclude './data/**' src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc -p tsconfig.build.json && npm run build --prefix web",
     "typecheck": "tsc -p tsconfig.json --noEmit",

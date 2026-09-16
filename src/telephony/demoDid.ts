@@ -210,5 +210,18 @@ export function demoStreamUrl(publicBaseUrl: string, slug: string): string {
 }
 
 function normalizeE164(value: string): string {
-  return value.trim().replace(/[\s()-]/g, "");
+  const trimmed = value.trim().replace(/^tel:/i, "").replace(/[\s()-]/g, "");
+  if (trimmed === DEMO_DID_NSN || trimmed === DEMO_DID_E164.replace(/^\+/, "")) {
+    return DEMO_DID_E164;
+  }
+  if (trimmed.startsWith("+")) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("351") && trimmed.length >= 12) {
+    return `+${trimmed}`;
+  }
+  if (/^\d{9}$/.test(trimmed)) {
+    return `+351${trimmed}`;
+  }
+  return trimmed;
 }

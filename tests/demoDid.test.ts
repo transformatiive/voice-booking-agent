@@ -30,6 +30,8 @@ describe("demo DID and use-case catalog", () => {
     expect(DEMO_DID_TEL).toBe("tel:+351210210260");
     expect(formatDemoDidNational("+351210210260")).toBe("21 021 0260");
     expect(isDemoDid("+351210210260")).toBe(true);
+    expect(isDemoDid("351210210260")).toBe(true);
+    expect(isDemoDid("210210260")).toBe(true);
     expect(isDemoDid("+351210210261")).toBe(false);
   });
 
