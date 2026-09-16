@@ -151,5 +151,7 @@ describe("clinic marketing demo", () => {
     expect(app).not.toMatch(/Grok|Sofia/);
     const landing = readWeb("pages/Landing.tsx");
     expect(landing).not.toMatch(/<select/);
+    expect(readWeb("components/onboard-dialog.tsx")).not.toMatch(/<select/);
+    expect(readWeb("components/site-header.tsx")).not.toMatch(/<select/);
   });
 });

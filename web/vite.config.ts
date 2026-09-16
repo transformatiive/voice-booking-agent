@@ -8,9 +8,13 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "@content": fileURLToPath(new URL("../src/content/articles.ts", import.meta.url)),
     },
   },
   server: {
+    fs: {
+      allow: [fileURLToPath(new URL("..", import.meta.url))],
+    },
     proxy: {
       "/api": "http://127.0.0.1:3000",
       "/voice": "http://127.0.0.1:3000",
