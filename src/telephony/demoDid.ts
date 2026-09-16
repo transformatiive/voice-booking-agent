@@ -1,0 +1,153 @@
+import type { UseCase } from "../domain/types.js";
+import { DEFAULT_AGENT_NAME } from "../domain/agent.js";
+
+export const DEMO_DID_E164 = "+351210210260";
+export const DEMO_DID_NSN = "210210260";
+export const DEMO_DID_DISPLAY = "21 021 0260";
+export const DEMO_DID_DISPLAY_INTL = "+351 21 021 0260";
+export const DEMO_DID_TEL = "tel:+351210210260";
+
+export type DemoPickerUseCase = "clinica" | "barbearia" | "restaurante" | "oficina" | "imobiliaria";
+
+export interface DemoUseCaseOption {
+  useCase: DemoPickerUseCase;
+  slug: string;
+  label: string;
+  agentName: string;
+  hint: string;
+}
+
+const OPTIONS: DemoUseCaseOption[] = [
+  { useCase: "clinica", slug: "clinica-central", label: "Clínica", agentName: DEFAULT_AGENT_NAME, hint: "Marcar consulta" },
+  { useCase: "barbearia", slug: "barbearia-lisboa", label: "Barbearia", agentName: DEFAULT_AGENT_NAME, hint: "Corte e barba" },
+  { useCase: "restaurante", slug: "restaurante-baixa", label: "Restaurante", agentName: DEFAULT_AGENT_NAME, hint: "Reserva de mesa" },
+  { useCase: "oficina", slug: "oficina-norte", label: "Oficina", agentName: DEFAULT_AGENT_NAME, hint: "Reparação e revisão" },
+  { useCase: "imobiliaria", slug: "imobiliaria-baixa", label: "Imobiliária", agentName: DEFAULT_AGENT_NAME, hint: "Marcar visita" },
+];
+
+const IVR_DIGIT_TO_USE_CASE: Record<string, DemoPickerUseCase> = {
+  "1": "clinica",
+  "2": "barbearia",
+  "3": "restaurante",
+  "4": "oficina",
+  "5": "imobiliaria",
+};
+
+interface CallerBind {
+  slug: string;
+  expiresAt: number;
+}
+
+const callerBinds = new Map<string, CallerBind>();
+
+export function listDemoOptions(): DemoUseCaseOption[] {
+  return OPTIONS.map((option) => ({ ...option }));
+}
+
+export function demoSlugForUseCase(useCase: UseCase): string {
+  switch (useCase) {
+    case "clinica":
+      return "clinica-central";
+    case "barbearia":
+    case "salao":
+      return "barbearia-lisboa";
+    case "restaurante":
+      return "restaurante-baixa";
+    case "oficina":
+      return "oficina-norte";
+    case "imobiliaria":
+      return "imobiliaria-baixa";
+    case "ginasio":
+    case "outro":
+      return "clinica-central";
+    default: {
+      const exhaustive: never = useCase;
+      throw new Error(`Unknown use case: ${String(exhaustive)}`);
+    }
+  }
+}
+
+export function formatDemoDidNational(e164: string): string {
+  const digits = normalizeE164(e164).replace(/^\+351/, "");
+  if (digits.length !== 9) {
+    return e164;
+  }
+  return `${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
+}
+
+export function isDemoDid(e164: string): boolean {
+  return normalizeE164(e164) === DEMO_DID_E164;
+}
+
+export function ivrUseCaseForDigit(digit: string): DemoPickerUseCase | undefined {
+  return IVR_DIGIT_TO_USE_CASE[digit];
+}
+
+export function useCaseFromSpeech(speech: string): DemoPickerUseCase | undefined {
+  const text = speech
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (/\b(clinica|consulta|saude)\b/.test(text)) return "clinica";
+  if (/\b(barbearia|barbear|cabeleireiro|salao)\b/.test(text)) return "barbearia";
+  if (/\b(restaurante|reserva|mesa)\b/.test(text)) return "restaurante";
+  if (/\b(oficina|mecanica|carro|revisao)\b/.test(text)) return "oficina";
+  if (/\b(imobiliaria|imovel|visita)\b/.test(text)) return "imobiliaria";
+  return undefined;
+}
+
+export function bindDemoCaller(opts: {
+  callerE164: string;
+  useCase: UseCase;
+  now: number;
+  ttlMs: number;
+}): void {
+  const callerE164 = normalizeE164(opts.callerE164);
+  if (!callerE164) {
+    return;
+  }
+  callerBinds.set(callerE164, {
+    slug: demoSlugForUseCase(opts.useCase),
+    expiresAt: opts.now + opts.ttlMs,
+  });
+}
+
+/** Optional landing hint only — never skips the on-call ask. */
+export function boundSlugForCaller(callerE164: string, now: number): string | undefined {
+  const bind = callerBinds.get(normalizeE164(callerE164));
+  if (bind && bind.expiresAt > now) {
+    return bind.slug;
+  }
+  return undefined;
+}
+
+export function resolveDemoSlugForInbound(opts: {
+  toE164: string;
+  fromE164?: string;
+  digits?: string;
+  speech?: string;
+  now: number;
+}): { kind: "slug"; slug: string } | { kind: "ivr" } {
+  if (opts.digits) {
+    const mapped = ivrUseCaseForDigit(opts.digits.trim());
+    if (mapped) {
+      return { kind: "slug", slug: demoSlugForUseCase(mapped) };
+    }
+  }
+  if (opts.speech) {
+    const spoken = useCaseFromSpeech(opts.speech);
+    if (spoken) {
+      return { kind: "slug", slug: demoSlugForUseCase(spoken) };
+    }
+  }
+  return { kind: "ivr" };
+}
+
+export function demoStreamUrl(publicBaseUrl: string, slug: string): string {
+  const base = publicBaseUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+  return `${base.replace(/\/$/, "")}/voice/live-media?slug=${encodeURIComponent(slug)}`;
+}
+
+function normalizeE164(value: string): string {
+  return value.trim().replace(/[\s()-]/g, "");
+}

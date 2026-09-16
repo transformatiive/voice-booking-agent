@@ -11,17 +11,16 @@ describe("plan marketing copy", () => {
     expect(PLANS.pro.features).toContain("Até 3 recursos (profissionais/espaços)");
   });
 
-  it("sells Google Calendar conflict management on all paid plans, without Cal.com", () => {
-    const googleCalendarFeature =
-      "Agendamento por voz com Google Calendar (evita conflitos e sobreposições)";
+  it("sells booking onto the customer's Google Calendar, without Cal.com", () => {
+    const googleCalendarFeature = "Agendamento por voz com marcação no seu Google Calendar.";
     expect(PLANS.base.features).toContain(googleCalendarFeature);
     expect(PLANS.pro.features[0]).toBe("Tudo do Base");
     expect(PLANS.studio.features[0]).toBe("Tudo do Pro");
     const all = Object.values(PLANS)
       .flatMap((plan) => plan.features)
       .join("\n");
-    expect(all).toMatch(/Google Calendar/);
-    expect(all).toMatch(/conflitos|sobreposições/);
+    expect(all).toMatch(/marcação no seu Google Calendar/);
+    expect(all).not.toMatch(/evita conflitos e sobreposições/);
     expect(all).not.toMatch(/cal\.com/i);
   });
 

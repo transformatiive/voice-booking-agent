@@ -10,6 +10,8 @@ import {
   speakSlot,
 } from "../scheduling/voiceSlots.js";
 import { isVoiceDemoSlug } from "../store/seed.js";
+import { DEFAULT_AGENT_NAME } from "../domain/agent.js";
+import { demoStreamUrl } from "./demoDid.js";
 
 /** Never let a Cal.com (or other) hop block the voice tool loop. */
 export const VOICE_TOOL_TIMEOUT_MS = 1_500;
@@ -51,10 +53,36 @@ function raceTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   });
 }
 
+export function buildDemoIvrTeXML(): string {
+  const prompt =
+    "Olá, sou o Atende. Que demonstração quer ouvir: clínica, barbearia, restaurante, oficina ou imobiliária? Pode dizer o nome, ou premir 1 clínica, 2 barbearia, 3 restaurante, 4 oficina, 5 imobiliária.";
+  return [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<Response>`,
+    `  <Gather numDigits="1" timeout="8" action="/voice/incoming-demo" method="POST" input="dtmf speech" language="pt-PT" hints="clínica,barbearia,restaurante,oficina,imobiliária">`,
+    `    <Say language="pt-PT">${escapeXml(prompt)}</Say>`,
+    `  </Gather>`,
+    `</Response>`,
+  ].join("\n");
+}
+
+export function buildDemoLiveTeXML(opts: { slug: string; publicBaseUrl: string }): string {
+  const streamUrl = demoStreamUrl(opts.publicBaseUrl, opts.slug);
+  return [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<Response>`,
+    `  <Connect>`,
+    `    <Stream url="${escapeXml(streamUrl)}" bidirectionalMode="rtp"></Stream>`,
+    `  </Connect>`,
+    `</Response>`,
+  ].join("\n");
+}
+
 /**
  * Inbound-call TeXML (Telnyx). Implements the core "Disponível / A cortar"
  * model: if a barber is available we warm-transfer the call to their mobile;
  * otherwise the AI assistant greets and (in production) takes the booking.
+ * Demo DID inbound must not use this path — use buildDemoLiveTeXML / IVR.
  */
 export function buildIncomingTeXML(business: Business): string {
   const lang = VOICE_LANG[business.locale] ?? "pt-PT";
@@ -77,8 +105,8 @@ export function buildIncomingTeXML(business: Business): string {
 
   const afterHours =
     business.locale === "pt"
-      ? `De momento não podemos atender. O assistente ${business.agentName || "virtual"} pode marcar a sua hora. Diga o serviço e o dia pretendido após o sinal.`
-      : `We can't take your call right now. The assistant ${business.agentName || ""} can book your appointment. Say the service and day after the tone.`;
+      ? `De momento não podemos atender. O assistente ${business.agentName || DEFAULT_AGENT_NAME} pode marcar a sua hora. Diga o serviço e o dia pretendido após o sinal.`
+      : `We can't take your call right now. The assistant ${business.agentName || DEFAULT_AGENT_NAME} can book your appointment. Say the service and day after the tone.`;
 
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
@@ -110,7 +138,7 @@ function isVoiceFunctionName(name: string): name is VoiceFunctionName {
 }
 
 /**
- * Function/tool webhook for a production voice LLM (Grok Live 2 / Retell / Vapi).
+ * Function/tool webhook for GPT-Live-1 (and compatible voice orchestrators).
  * The orchestrator calls these to read services, get open slots, book, list, and cancel.
  */
 export async function handleVoiceFunction(

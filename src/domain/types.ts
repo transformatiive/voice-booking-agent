@@ -1,6 +1,14 @@
 export type Locale = "pt" | "en";
 
-export type UseCase = "barbearia" | "salao" | "clinica" | "restaurante" | "outro";
+export type UseCase =
+  | "barbearia"
+  | "salao"
+  | "clinica"
+  | "restaurante"
+  | "oficina"
+  | "imobiliaria"
+  | "ginasio"
+  | "outro";
 
 export type PlanId = "base" | "pro" | "studio";
 
@@ -38,7 +46,13 @@ export type WeeklyHours = [DayHours, DayHours, DayHours, DayHours, DayHours, Day
 
 export type NumberType = "mobile" | "geographic" | "tollfree";
 
-export type NumberStatus = "none" | "provisioning" | "active" | "porting" | "released";
+export type NumberStatus =
+  | "none"
+  | "provisioning"
+  | "pending_approval"
+  | "active"
+  | "porting"
+  | "released";
 
 export interface PhoneNumber {
   e164: string;

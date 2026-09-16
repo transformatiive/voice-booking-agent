@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MockNumberProvider } from "../src/telephony/mock.js";
-import { buildIncomingTeXML, handleVoiceFunction } from "../src/telephony/voice.js";
+import { TelnyxNumberProvider } from "../src/telephony/telnyx.js";
+import { buildDemoIvrTeXML, buildDemoLiveTeXML, buildIncomingTeXML, handleVoiceFunction } from "../src/telephony/voice.js";
 import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
 import { tempStore } from "./helpers.js";
 
@@ -12,7 +13,7 @@ function makeBusiness() {
     name: "Barbearia Teste",
     useCase: "barbearia",
     locale: "pt",
-    agentName: "Sofia",
+    agentName: "Atende",
     agentGender: "feminino",
     planId: "base",
   });
@@ -49,6 +50,49 @@ describe("voice inbound TeXML", () => {
     const xml = buildIncomingTeXML(business);
     expect(xml).not.toContain("<Dial");
     expect(xml).toContain("<Record");
+  });
+});
+
+describe("demo DID inbound TeXML", () => {
+  it("asks which demonstration to run with speech and DTMF", () => {
+    const xml = buildDemoIvrTeXML();
+    expect(xml).toContain("<Gather");
+    expect(xml).toContain('input="dtmf speech"');
+    expect(xml).toContain("clínica, barbearia, restaurante, oficina ou imobiliária");
+    expect(xml).toContain("sou o Atende");
+    expect(xml).not.toContain("Sofia");
+    expect(xml).not.toContain("<Dial");
+  });
+
+  it("connects a chosen vertical to Live media, not a human Dial", () => {
+    const xml = buildDemoLiveTeXML({ slug: "oficina-norte", publicBaseUrl: "https://atende.pt" });
+    expect(xml).toContain("<Stream");
+    expect(xml).toContain("oficina-norte");
+    expect(xml).not.toContain("<Dial");
+    expect(xml).not.toMatch(/<Say[^>]*>a ligar/);
+  });
+});
+
+describe("Telnyx orders stay provisioning until approved", () => {
+  it("maps a successful order API response to provisioning by default", async () => {
+    const fetchImpl = async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/number_orders") && init?.method === "POST") {
+        return new Response(JSON.stringify({ data: { status: "pending" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`unexpected ${url}`);
+    };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchImpl as typeof fetch;
+    try {
+      const provider = new TelnyxNumberProvider("key", "conn");
+      const number = await provider.provisionNumber("+351210000000");
+      expect(number.status).toBe("provisioning");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 

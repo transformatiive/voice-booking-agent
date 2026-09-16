@@ -32,6 +32,19 @@ const SERVICE_SEEDS: Record<UseCase, ServiceSeed[]> = {
     { name: "Reserva de mesa (4 pessoas)", durationMinutes: 90, priceCents: null },
     { name: "Reserva de grupo", durationMinutes: 120, priceCents: null },
   ],
+  oficina: [
+    { name: "Diagnóstico", durationMinutes: 45, priceCents: 3500 },
+    { name: "Revisão", durationMinutes: 60, priceCents: 8900 },
+    { name: "Pneus", durationMinutes: 30, priceCents: 2500 },
+  ],
+  imobiliaria: [
+    { name: "Visita ao imóvel", durationMinutes: 45, priceCents: null },
+    { name: "Avaliação", durationMinutes: 60, priceCents: null },
+  ],
+  ginasio: [
+    { name: "Aula experimental", durationMinutes: 45, priceCents: null },
+    { name: "Personal trainer", durationMinutes: 60, priceCents: 4500 },
+  ],
   outro: [{ name: "Marcação", durationMinutes: 30, priceCents: null }],
 };
 

@@ -116,7 +116,7 @@ describe("voice demo slots", () => {
     }
   });
 
-  it("books a clinic slot, persists it, and tells Sofia to mention SMS", async () => {
+  it("books a clinic slot, persists it, and tells Atende to mention SMS", async () => {
     const { store, business, scheduler } = clinic();
     const slots = (await handleVoiceFunction(
       business,

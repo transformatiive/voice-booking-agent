@@ -1,4 +1,4 @@
-import type { NumberType, PhoneNumber } from "../domain/types.js";
+import type { NumberStatus, NumberType, PhoneNumber } from "../domain/types.js";
 import type { AvailableNumber, NumberProvider, SearchOptions } from "./provider.js";
 
 const TELNYX_API = "https://api.telnyx.com/v2";
@@ -19,6 +19,17 @@ function telnyxPhoneNumberType(type: NumberType): string {
 }
 
 /** Primary provider. Requires TELNYX_API_KEY (KYC-gated inventory). */
+function mapTelnyxOrderStatus(status: string | undefined): NumberStatus {
+  switch (status) {
+    case "success":
+      return "active";
+    case "needs_review":
+      return "pending_approval";
+    default:
+      return "provisioning";
+  }
+}
+
 export class TelnyxNumberProvider implements NumberProvider {
   readonly name = "telnyx" as const;
 
@@ -59,18 +70,18 @@ export class TelnyxNumberProvider implements NumberProvider {
   }
 
   async provisionNumber(e164: string): Promise<PhoneNumber> {
-    await this.call("/number_orders", {
+    const payload = (await this.call("/number_orders", {
       method: "POST",
       body: JSON.stringify({
         phone_numbers: [{ phone_number: e164 }],
         connection_id: this.connectionId,
       }),
-    });
+    })) as { data?: { status?: string } };
     return {
       e164,
       provider: "telnyx",
       type: e164.startsWith("+3519") ? "mobile" : "geographic",
-      status: "active",
+      status: mapTelnyxOrderStatus(payload?.data?.status),
       monthlyCostCents: 0,
     };
   }

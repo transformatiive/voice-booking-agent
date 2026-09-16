@@ -12,7 +12,7 @@ function makeAgent(locale: "pt" | "en" = "pt") {
     name: "Barbearia Teste",
     useCase: "barbearia",
     locale,
-    agentName: "Sofia",
+    agentName: "Atende",
     agentGender: "feminino",
     planId: "base",
   });
@@ -115,7 +115,7 @@ describe("ConversationManager (PT)", () => {
       name: "Clínica Teste",
       useCase: "clinica",
       locale: "pt",
-      agentName: "Sofia",
+      agentName: "Atende",
       agentGender: "feminino",
       planId: "base",
     });

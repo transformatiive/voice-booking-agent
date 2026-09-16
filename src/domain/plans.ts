@@ -3,9 +3,13 @@ import type { PlanId } from "./types.js";
 export interface Plan {
   id: PlanId;
   name: string;
+  /** Landing/backoffice display name (Essencial / Pro / Estúdio). Ids stay base/pro/studio. */
+  displayName: string;
   /** Monthly list price in EUR cents. Includes the DID rental in COGS. */
   priceCents: number;
   includedMinutes: number;
+  /** Included trial minutes during the 14-day trial (copy + future Stripe meter). */
+  trialMinutes: number;
   /** Metered overage price per minute, EUR cents. */
   overageCentsPerMinute: number;
   maxResources: number | null;
@@ -22,14 +26,16 @@ export const PLANS: Record<PlanId, Plan> = {
   base: {
     id: "base",
     name: "Base",
+    displayName: "Essencial",
     priceCents: 4900,
     includedMinutes: 200,
+    trialMinutes: 45,
     overageCentsPerMinute: 12,
     maxResources: 1,
     features: [
       "1 número +351 incluído",
       "200 minutos de atendimento incluídos",
-      "Agendamento por voz com Google Calendar (evita conflitos e sobreposições)",
+      "Agendamento por voz com marcação no seu Google Calendar.",
       "Transferência de chamada para o seu telemóvel",
       "Suporte por email",
     ],
@@ -37,8 +43,10 @@ export const PLANS: Record<PlanId, Plan> = {
   pro: {
     id: "pro",
     name: "Pro",
+    displayName: "Pro",
     priceCents: 9900,
     includedMinutes: 600,
+    trialMinutes: 45,
     overageCentsPerMinute: 10,
     maxResources: 3,
     features: [
@@ -52,8 +60,10 @@ export const PLANS: Record<PlanId, Plan> = {
   studio: {
     id: "studio",
     name: "Studio",
+    displayName: "Estúdio",
     priceCents: 19900,
     includedMinutes: 1500,
+    trialMinutes: 45,
     overageCentsPerMinute: 8,
     maxResources: null,
     features: [

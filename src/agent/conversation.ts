@@ -1,4 +1,5 @@
 import type { Booking, Business, BookingSource, Locale, Service } from "../domain/types.js";
+import { DEFAULT_AGENT_NAME } from "../domain/agent.js";
 import type { Store } from "../store/store.js";
 import type { Scheduler } from "../scheduling/scheduler.js";
 import { checkAvailability, suggestSlots } from "../scheduling/availability.js";
@@ -393,7 +394,7 @@ function firstAvailableResource(business: Business): string | null {
 
 export function greeting(business: Business): string {
   const L = business.locale;
-  const agent = business.agentName || (L === "en" ? "the assistant" : "o assistente");
+  const agent = business.agentName || DEFAULT_AGENT_NAME;
   const offered = servicesSentence(business);
   if (L === "pt") {
     if (business.useCase === "clinica") {

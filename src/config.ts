@@ -59,11 +59,14 @@ export const config = {
   voice: {
     /** Shared secret to authenticate Retell/Vapi function webhooks. */
     functionWebhookSecret: env("VOICE_FUNCTION_SECRET"),
-    /** xAI Grok Live 2. Read live so tests can stub env; never expose to the browser. */
-    get xaiApiKey(): string | undefined {
-      return env("XAI_API_KEY");
+    get openaiApiKey(): string | undefined {
+      return env("OPENAI_API_KEY");
     },
+    openaiLiveBackendModel: env("OPENAI_LIVE_BACKEND_MODEL") ?? "gpt-5.6-terra",
+    opsApproveSecret: env("OPS_APPROVE_SECRET"),
   },
+
+  demoDidE164: env("DEMO_DID_E164") ?? "+351210210260",
 } as const;
 
 export function featureFlags() {
@@ -72,7 +75,8 @@ export function featureFlags() {
     stripe: Boolean(config.billing.stripeSecretKey),
     telnyx: Boolean(config.telephony.telnyxApiKey),
     zadarma: Boolean(config.telephony.zadarmaKey && config.telephony.zadarmaSecret),
-    grokVoice: Boolean(config.voice.xaiApiKey),
+    gptLive: Boolean(config.voice.openaiApiKey),
+    demoActivate: env("DEMO_ACTIVATE") === "true",
   };
 }
 
