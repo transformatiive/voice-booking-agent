@@ -305,6 +305,15 @@ class LiveMediaBridge {
       },
     });
     this.sendOpenAi({ type: "response.create" });
+    const spoken = spokenCueAfterTool(name, output);
+    if (spoken) {
+      this.sendOpenAi({
+        type: "session.commentary.append",
+        event_id: `tool-speak-${callId}`,
+        delegation_id: null,
+        content: spoken,
+      });
+    }
   }
 
   private sendOpenAi(event: Record<string, unknown>): void {
@@ -346,4 +355,24 @@ class LiveMediaBridge {
 function stringField(rec: Record<string, unknown>, key: string): string | undefined {
   const value = rec[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * GPT-Live `response.create` continues the Responses backend; it does not make the
+ * voice speak. After the demo picker locks a vertical, append commentary so the
+ * caller hears the greeting instead of «a preparar o cenário».
+ */
+export function spokenCueAfterTool(name: string, output: Record<string, unknown>): string | undefined {
+  if (name !== "select_demo_vertical") {
+    return undefined;
+  }
+  const speak = stringField(output, "speak") ?? stringField(output, "message");
+  if (speak) {
+    return speak;
+  }
+  const instruction = stringField(output, "instruction");
+  if (instruction) {
+    return instruction;
+  }
+  return "A opção está confirmada. Fala já como a recepção desse negócio. Não digas que estás a preparar o cenário.";
 }

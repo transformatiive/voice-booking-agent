@@ -10,6 +10,7 @@ import {
   LIVE_MEDIA_USER_AGENT,
   attachLiveMedia,
   sessionConfigForLiveMedia,
+  spokenCueAfterTool,
 } from "../src/telephony/liveMedia.js";
 import { LIVE_VOICE_MODEL, buildDemoPickerLiveSessionConfig } from "../src/telephony/gptLive.js";
 import { app } from "../src/server.js";
@@ -138,7 +139,7 @@ describe("live-media WebSocket route", () => {
       }),
       handleTool: async (call) => {
         tools.push(call);
-        return { ok: true, slug: "oficina-norte" };
+        return { ok: true, slug: "oficina-norte", speak: "Olá, oficina." };
       },
       connectOpenAi: (url, init) => {
         expect(url).toBe("wss://api.openai.com/v1/live/sessions");
@@ -221,7 +222,112 @@ describe("live-media WebSocket route", () => {
     expect(tools[0]).toEqual({ name: "select_demo_vertical", arguments: { vertical: "4" } });
     await viWait(() =>
       openai.sent.some((e) => (e as { type?: string }).type === "response.item.create") &&
-      openai.sent.some((e) => (e as { type?: string }).type === "response.create"),
+      openai.sent.some((e) => (e as { type?: string }).type === "response.create") &&
+      openai.sent.some((e) => (e as { type?: string }).type === "session.commentary.append"),
+    );
+    const toolOutput = openai.sent.find((e) => (e as { type?: string }).type === "response.item.create") as {
+      item: { type: string; call_id: string; output: string };
+    };
+    expect(toolOutput.item.type).toBe("function_call_output");
+    expect(toolOutput.item.call_id).toBe("call_1");
+    expect(JSON.parse(toolOutput.item.output)).toEqual(
+      expect.objectContaining({ ok: true, speak: "Olá, oficina." }),
+    );
+    const spoken = openai.sent.find(
+      (e) =>
+        (e as { type?: string }).type === "session.commentary.append" &&
+        String((e as { content?: string }).content).includes("Olá, oficina"),
+    ) as { type: string; delegation_id: null; content: string };
+    expect(spoken.delegation_id).toBeNull();
+    expect(spoken.content).toMatch(/Olá, oficina/);
+  });
+
+  it("after select_demo_vertical, continues speech then accepts the next booking tool turn", async () => {
+    const appLocal = express();
+    const server = createServer(appLocal);
+    servers.push(server);
+    const openai = new MockOpenAiSocket();
+    const tools: Array<{ name: string; arguments: Record<string, unknown> }> = [];
+    attachLiveMedia(server, {
+      openaiApiKey: "sk-test",
+      sessionForSlug: () => ({
+        slug: DEMO_PICKER_SLUG,
+        agentName: "Atende",
+        session: pickerSession(),
+      }),
+      handleTool: async (call) => {
+        tools.push(call);
+        if (call.name === "select_demo_vertical") {
+          return { ok: true, slug: "oficina-norte", speak: "Olá, oficina." };
+        }
+        return { ok: true, slots: ["2026-08-27T10:00:00.000Z"], message: "Tenho vaga às 10h." };
+      },
+      connectOpenAi: () => {
+        queueMicrotask(() => openai.emit("open"));
+        return openai;
+      },
+    });
+    const port = await listen(server);
+    const telnyx = new WebSocket(`ws://127.0.0.1:${port}${LIVE_MEDIA_PATH}?slug=${DEMO_PICKER_SLUG}`);
+    sockets.push(telnyx);
+    await new Promise<void>((resolve, reject) => {
+      telnyx.once("open", () => resolve());
+      telnyx.once("error", reject);
+    });
+    telnyx.send(
+      JSON.stringify({
+        event: "start",
+        start: { call_control_id: "v3:demo2", from: "+351910000088" },
+      }),
+    );
+    await viWait(() => openai.sent.some((e) => (e as { type?: string }).type === "session.start"));
+    openai.emitJson({ type: "session.started", session: { id: "live_demo2" } });
+    openai.emitJson({
+      type: "response.event",
+      event: {
+        type: "response.output_item.done",
+        item: {
+          type: "function_call",
+          status: "completed",
+          call_id: "call_vertical",
+          name: "select_demo_vertical",
+          arguments: { vertical: "oficina" },
+        },
+      },
+    });
+    await viWait(() => tools.some((t) => t.name === "select_demo_vertical"));
+    await viWait(() =>
+      openai.sent.some(
+        (e) =>
+          (e as { type?: string }).type === "session.commentary.append" &&
+          String((e as { content?: string }).content).includes("Olá, oficina"),
+      ),
+    );
+
+    openai.emitJson({
+      type: "response.event",
+      event: {
+        type: "response.output_item.done",
+        item: {
+          type: "function_call",
+          status: "completed",
+          call_id: "call_slots",
+          name: "get_slots",
+          arguments: { service: "Revisão" },
+        },
+      },
+    });
+    await viWait(() => tools.some((t) => t.name === "get_slots"));
+    await viWait(() =>
+      openai.sent.filter((e) => (e as { type?: string }).type === "response.create").length >= 2,
+    );
+    const slotOutput = openai.sent.find((e) => {
+      if ((e as { type?: string }).type !== "response.item.create") return false;
+      const item = (e as { item?: { call_id?: string } }).item;
+      return item?.call_id === "call_slots";
+    }) as { item: { output: string } };
+    expect(JSON.parse(slotOutput.item.output)).toEqual(
+      expect.objectContaining({ ok: true, slots: ["2026-08-27T10:00:00.000Z"] }),
     );
   });
 });
@@ -239,6 +345,16 @@ describe("sessionConfigForLiveMedia", () => {
     expect(media.model).toBe("gpt-live-1");
     expect((media.audio as { format: unknown }).format).toEqual({ type: "audio/pcmu", rate: 8000 });
     expect(JSON.stringify(media)).toMatch(/select_demo_vertical/);
+  });
+});
+
+describe("spokenCueAfterTool", () => {
+  it("turns select_demo_vertical speak into live commentary so the call continues", () => {
+    expect(
+      spokenCueAfterTool("select_demo_vertical", { ok: true, speak: "Olá, oficina." }),
+    ).toBe("Olá, oficina.");
+    expect(spokenCueAfterTool("get_slots", { message: "Tenho vaga às 10h." })).toBeUndefined();
+    expect(spokenCueAfterTool("select_demo_vertical", {})).toMatch(/preparar o cenário/);
   });
 });
 

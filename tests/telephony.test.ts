@@ -278,11 +278,17 @@ describe("demo DID picker tools", () => {
       fromE164: "+351910000077",
       callSid: "CA_picker",
       now: NOW,
-    })) as { ok: boolean; slug: string; businessName: string };
+    })) as { ok: boolean; slug: string; businessName: string; speak?: string; message?: string; instruction?: string };
     expect(selected.ok).toBe(true);
     expect(selected.slug).toBe("oficina-norte");
     expect(selected.businessName).toBe("Oficina Norte");
     expect(rememberedDemoSlug({ fromE164: "+351910000077", now: NOW.getTime() })).toBe("oficina-norte");
+    expect(selected.speak).toMatch(/Oficina Norte/);
+    expect(selected.message).toMatch(/Oficina Norte/);
+    expect(String(selected.instruction)).toMatch(/Fala já/);
+    expect(String(selected.instruction)).toMatch(/preparar o cenário/);
+    expect(String(selected.instruction)).not.toMatch(/Fuso:|Não te apresentes como uma demo/);
+    expect(JSON.stringify(selected)).not.toMatch(/buildLiveInstructions/);
 
     const slots = (await handleDemoPickerFunction({
       store,
