@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { MockNumberProvider } from "../src/telephony/mock.js";
 import { TelnyxNumberProvider } from "../src/telephony/telnyx.js";
-import { absolutePublicUrl, buildDemoIvrTeXML, buildDemoLiveTeXML, buildIncomingTeXML, handleDemoInbound, handleVoiceFunction } from "../src/telephony/voice.js";
+import { absolutePublicUrl, buildDemoLiveTeXML, buildIncomingTeXML, handleDemoInbound, handleDemoPickerFunction, handleVoiceFunction } from "../src/telephony/voice.js";
 import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
-import { DEMO_DID_E164, rememberedDemoSlug } from "../src/telephony/demoDid.js";
+import { DEMO_DID_E164, DEMO_PICKER_SLUG, rememberedDemoSlug } from "../src/telephony/demoDid.js";
 import { tempStore } from "./helpers.js";
+import { ensureDemoBusinesses } from "../src/store/seed.js";
 
 const NOW = new Date(2026, 7, 26, 9, 0, 0);
 
@@ -55,28 +56,36 @@ describe("voice inbound TeXML", () => {
 });
 
 describe("demo DID inbound TeXML", () => {
-  it("asks which demonstration to run with speech and DTMF", () => {
-    const xml = buildDemoIvrTeXML("https://atende.pt");
-    expect(xml).toContain("<Gather");
-    expect(xml).toContain('input="dtmf speech"');
-    expect(xml).toContain('action="https://atende.pt/voice/incoming-demo"');
-    expect(xml).not.toContain('action="/voice/incoming-demo"');
-    expect(xml).toContain("clínica, barbearia, restaurante, oficina ou imobiliária");
-    expect(xml).toContain("sou o Atende");
-    expect(xml).not.toContain("Sofia");
+  it("connects immediately to Live media, without a Gather/Say menu", () => {
+    const xml = handleDemoInbound({
+      toE164: DEMO_DID_E164,
+      fromE164: "+351910000044",
+      now: 3_000_000,
+      publicBaseUrl: "https://atende.pt",
+    });
+    expect(xml).toContain("<Connect>");
+    expect(xml).toContain("<Stream");
+    expect(xml).toContain(`live-media?slug=${DEMO_PICKER_SLUG}`);
+    expect(xml).not.toContain("<Gather");
+    expect(xml).not.toContain("<Say");
     expect(xml).not.toContain("<Dial");
+    expect(xml).not.toContain("sou o Atende");
   });
 
-  it("builds an absolute Gather action even when PUBLIC_BASE_URL has a trailing slash", () => {
+  it("builds an absolute Stream URL even when PUBLIC_BASE_URL has a trailing slash", () => {
     expect(absolutePublicUrl("https://atende.pt/", "/voice/incoming-demo")).toBe(
       "https://atende.pt/voice/incoming-demo",
     );
-    const xml = buildDemoIvrTeXML("https://atende.pt/");
-    expect(xml).toContain('action="https://atende.pt/voice/incoming-demo"');
+    const xml = handleDemoInbound({
+      toE164: DEMO_DID_E164,
+      now: 3_000_000,
+      publicBaseUrl: "https://atende.pt/",
+    });
+    expect(xml).toContain(`wss://atende.pt/voice/live-media?slug=${DEMO_PICKER_SLUG}`);
     expect(xml).not.toContain("atende.pt//voice");
   });
 
-  it("connects a chosen vertical to Live media, not a human Dial", () => {
+  it("connects a chosen vertical stream URL to Live media, not a human Dial", () => {
     const xml = buildDemoLiveTeXML({ slug: "oficina-norte", publicBaseUrl: "https://atende.pt" });
     expect(xml).toContain("<Stream");
     expect(xml).toContain("oficina-norte");
@@ -84,44 +93,34 @@ describe("demo DID inbound TeXML", () => {
     expect(xml).not.toMatch(/<Say[^>]*>a ligar/);
   });
 
-  it("asks first, then streams the live vertical from speech or DTMF", () => {
-    const ivr = handleDemoInbound({
-      toE164: DEMO_DID_E164,
-      fromE164: "+351910000044",
-      now: 3_000_000,
-      publicBaseUrl: "https://atende.pt",
-    });
-    expect(ivr).toContain("<Gather");
-    expect(ivr).toContain('action="https://atende.pt/voice/incoming-demo"');
-    expect(ivr).not.toContain('action="/voice/incoming-demo"');
-    expect(ivr).toContain("sou o Atende");
-
-    const dtmf = handleDemoInbound({
+  it("does not wait for DTMF or speech before streaming Live", () => {
+    const withDigits = handleDemoInbound({
       toE164: DEMO_DID_E164,
       fromE164: "+351910000044",
       digits: "4",
       now: 3_000_000,
       publicBaseUrl: "https://atende.pt",
     });
-    expect(dtmf).toContain("oficina-norte");
-    expect(dtmf).toContain("<Stream");
-    expect(rememberedDemoSlug({ fromE164: "+351910000044", now: 3_000_000 })).toBe("oficina-norte");
+    expect(withDigits).toContain(`slug=${DEMO_PICKER_SLUG}`);
+    expect(withDigits).toContain("<Stream");
+    expect(withDigits).not.toContain("oficina-norte");
+    expect(rememberedDemoSlug({ fromE164: "+351910000044", now: 3_000_000 })).toBeUndefined();
 
-    const speech = handleDemoInbound({
+    const withSpeech = handleDemoInbound({
       toE164: DEMO_DID_E164,
       fromE164: "+351910000055",
       speech: "quero a imobiliária",
       now: 3_000_000,
       publicBaseUrl: "https://atende.pt",
     });
-    expect(speech).toContain("imobiliaria-baixa");
+    expect(withSpeech).toContain(`slug=${DEMO_PICKER_SLUG}`);
+    expect(withSpeech).not.toContain("imobiliaria-baixa");
   });
 
-  it("dials OpenAI SIP after the caller picks a vertical", () => {
+  it("dials OpenAI SIP immediately, without a Gather menu", () => {
     const xml = handleDemoInbound({
       toE164: DEMO_DID_E164,
       fromE164: "+351910000066",
-      digits: "3",
       now: 4_000_000,
       publicBaseUrl: "https://atende.pt",
       sipUri: "sip:proj_test@sip.api.openai.com;transport=tls",
@@ -129,7 +128,9 @@ describe("demo DID inbound TeXML", () => {
     expect(xml).toContain("<Sip>");
     expect(xml).toContain("sip:proj_test@sip.api.openai.com");
     expect(xml).not.toContain("<Stream");
-    expect(rememberedDemoSlug({ fromE164: "+351910000066", now: 4_000_000 })).toBe("restaurante-baixa");
+    expect(xml).not.toContain("<Gather");
+    expect(xml).not.toContain("<Say");
+    expect(rememberedDemoSlug({ fromE164: "+351910000066", now: 4_000_000 })).toBeUndefined();
   });
 });
 
@@ -224,5 +225,64 @@ describe("voice function webhook", () => {
     )) as { ok: boolean };
     expect(cancelled.ok).toBe(true);
     expect(store.listBookings(business.id)).toHaveLength(0);
+  });
+});
+
+describe("demo DID picker tools", () => {
+  it("locks a vertical inside the Live session and books that tenant", async () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const scheduler = new InMemoryScheduler(store, () => NOW);
+    const selected = (await handleDemoPickerFunction({
+      store,
+      scheduler,
+      call: { name: "select_demo_vertical", arguments: { vertical: "4" } },
+      fromE164: "+351910000077",
+      callSid: "CA_picker",
+      now: NOW,
+    })) as { ok: boolean; slug: string; businessName: string };
+    expect(selected.ok).toBe(true);
+    expect(selected.slug).toBe("oficina-norte");
+    expect(selected.businessName).toBe("Oficina Norte");
+    expect(rememberedDemoSlug({ fromE164: "+351910000077", now: NOW.getTime() })).toBe("oficina-norte");
+
+    const slots = (await handleDemoPickerFunction({
+      store,
+      scheduler,
+      call: { name: "get_slots", arguments: { service: "Revisão", date: "2026-08-27" } },
+      fromE164: "+351910000077",
+      callSid: "CA_picker",
+      now: NOW,
+    })) as { slots: string[] };
+    expect(slots.slots.length).toBeGreaterThan(0);
+
+    const booked = (await handleDemoPickerFunction({
+      store,
+      scheduler,
+      call: {
+        name: "book_appointment",
+        arguments: { service: "Revisão", start: slots.slots[0], customerName: "Rui", vertical: "oficina" },
+      },
+      fromE164: "+351910000077",
+      now: NOW,
+    })) as { ok: boolean };
+    expect(booked.ok).toBe(true);
+    expect(store.getBusinessBySlug("oficina-norte")).toBeDefined();
+    expect(store.listBookings(store.getBusinessBySlug("oficina-norte")!.id)).toHaveLength(1);
+    expect(store.listBookings(store.getBusinessBySlug("clinica-central")!.id)).toHaveLength(0);
+  });
+
+  it("refuses to book before a vertical is chosen", async () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const scheduler = new InMemoryScheduler(store, () => NOW);
+    const result = await handleDemoPickerFunction({
+      store,
+      scheduler,
+      call: { name: "get_slots", arguments: { service: "Revisão" } },
+      fromE164: "+351910000099",
+      now: NOW,
+    });
+    expect(result.error).toBe("select_vertical_first");
   });
 });

@@ -13,12 +13,13 @@ import { createScheduler } from "./scheduling/index.js";
 import { ConversationManager, greeting } from "./agent/conversation.js";
 import { BillingService } from "./billing/stripe.js";
 import { TelephonyService } from "./telephony/index.js";
-import { buildIncomingTeXML, handleDemoInbound, handleVoiceFunction } from "./telephony/voice.js";
+import { buildIncomingTeXML, handleDemoInbound, handleDemoPickerFunction, handleVoiceFunction } from "./telephony/voice.js";
 import {
   acceptLiveIncomingCall,
   createLiveWebRtcSession,
   parseLiveIncomingWebhook,
   parseToolArguments,
+  sessionForDemoDidInbound,
 } from "./telephony/gptLive.js";
 import {
   DEMO_DID_DISPLAY,
@@ -27,12 +28,10 @@ import {
   DEMO_DID_NSN,
   DEMO_DID_TEL,
   bindDemoCaller,
-  demoSlugFromSipHeaders,
   demoSlugForUseCase,
   isDemoDid,
-  isDemoSlug,
+  isDemoPickerSlug,
   listDemoOptions,
-  rememberedDemoSlug,
 } from "./telephony/demoDid.js";
 import { consumeSessionQuota } from "./telephony/sessionLimit.js";
 import { MARKETING_DEMO_SLUG, ensureDemoBusinesses } from "./store/seed.js";
@@ -345,28 +344,15 @@ async function handleLiveSipIncoming(req: Request, res: Response): Promise<void>
     res.status(400).json({ error: "session_required" });
     return;
   }
-  const now = Date.now();
-  const bodySlug = typeof req.body?.slug === "string" ? req.body.slug.trim() : "";
-  const slug =
-    (bodySlug && isDemoSlug(bodySlug) ? bodySlug : undefined) ||
-    demoSlugFromSipHeaders(parsed.sipHeaders, now) ||
-    rememberedDemoSlug({
-      fromE164: typeof req.body?.from === "string" ? req.body.from : undefined,
-      callSid: typeof req.body?.CallSid === "string" ? req.body.CallSid : undefined,
-      now,
-    });
-  if (!slug) {
-    res.status(409).json({ error: "demo_vertical_required" });
-    return;
-  }
-  const business = store.getBusinessBySlug(slug);
-  if (!business) {
-    res.status(404).json({ error: "business_not_found" });
-    return;
-  }
+  const businesses = listDemoOptions()
+    .map((option) => store.getBusinessBySlug(option.slug))
+    .filter((business): business is Business => Boolean(business));
+  const inbound = sessionForDemoDidInbound(businesses);
   const result = await acceptLiveIncomingCall({
     sessionId: parsed.sessionId,
-    business,
+    session: inbound.session,
+    slug: inbound.slug,
+    agentName: inbound.agentName,
     apiKey: config.voice.openaiApiKey,
   });
   res.status(result.status).json(result.body);
@@ -426,6 +412,32 @@ app.post("/voice/incoming/:slug", (req, res) => {
 });
 
 app.post("/voice/functions/:slug", async (req, res) => {
+  if (isDemoPickerSlug(req.params.slug)) {
+    if (config.voice.functionWebhookSecret) {
+      if (req.header("x-voice-secret") !== config.voice.functionWebhookSecret) {
+        res.status(401).json({ error: "unauthorized" });
+        return;
+      }
+    }
+    const result = await handleDemoPickerFunction({
+      store,
+      scheduler,
+      call: {
+        name: String(req.body?.name ?? ""),
+        arguments: (req.body?.arguments as Record<string, unknown>) ?? {},
+      },
+      fromE164: voiceCallerFrom(req.body),
+      callSid: voiceCallSid(req.body),
+    }).catch((err: unknown) => {
+      console.error("[voice/functions/demo]", err instanceof Error ? err.message : err);
+      return {
+        error: "tool_failed",
+        instruction: "Continua a falar. Oferece uma hora próxima e pergunta se serve.",
+      };
+    });
+    res.json(result);
+    return;
+  }
   const business = store.getBusinessBySlug(req.params.slug);
   if (!business) {
     res.status(404).json({ error: "business_not_found" });
@@ -532,6 +544,18 @@ function isGender(value: unknown): value is AgentGender {
 }
 function isPlan(value: unknown): value is PlanId {
   return value === "base" || value === "pro" || value === "studio";
+}
+
+function voiceCallerFrom(body: unknown): string | undefined {
+  const rec = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const from = rec.From ?? rec.from;
+  return typeof from === "string" && from.trim() ? from : undefined;
+}
+
+function voiceCallSid(body: unknown): string | undefined {
+  const rec = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const sid = rec.CallSid ?? rec.call_sid ?? rec.callSid ?? rec.session_id ?? rec.sessionId;
+  return typeof sid === "string" && sid.trim() ? sid.trim() : undefined;
 }
 
 export { app, store, agent, billing, telephony, MARKETING_DEMO_SLUG };

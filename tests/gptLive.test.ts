@@ -3,12 +3,15 @@ import express from "express";
 import type { AddressInfo } from "node:net";
 import {
   LIVE_BACKEND_MODEL_DEFAULT,
+  LIVE_PICKER_TOOLS,
   LIVE_VOICE_MODEL,
   acceptLiveIncomingCall,
+  buildDemoPickerLiveSessionConfig,
   buildLiveSessionConfig,
   createLiveWebRtcSession,
   parseLiveIncomingWebhook,
   parseToolArguments,
+  sessionForDemoDidInbound,
 } from "../src/telephony/gptLive.js";
 import { handleVoiceFunction } from "../src/telephony/voice.js";
 import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
@@ -16,6 +19,7 @@ import { tempStore } from "./helpers.js";
 import { ensureDemoBusinesses, MARKETING_DEMO_SLUG } from "../src/store/seed.js";
 import { DEFAULT_AGENT_NAME } from "../src/domain/agent.js";
 import { featureFlags } from "../src/config.js";
+import { DEMO_PICKER_SLUG } from "../src/telephony/demoDid.js";
 
 describe("gpt-live-1 session config", () => {
   afterEach(() => {
@@ -71,6 +75,34 @@ describe("gpt-live-1 session config", () => {
     expect(String(buildLiveSessionConfig(imobiliaria).instructions)).toMatch(/visitas e avaliações/);
   });
 
+  it("demo DID picker session greets as Atende and embeds every vertical", () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const businesses = ["clinica-central", "barbearia-lisboa", "restaurante-baixa", "oficina-norte", "imobiliaria-baixa"].map(
+      (slug) => store.getBusinessBySlug(slug)!,
+    );
+    const inbound = sessionForDemoDidInbound(businesses);
+    expect(inbound.slug).toBe(DEMO_PICKER_SLUG);
+    expect(inbound.agentName).toBe(DEFAULT_AGENT_NAME);
+    const session = inbound.session;
+    expect(session.model).toBe("gpt-live-1");
+    expect(String(session.instructions)).toMatch(/português de Portugal/);
+    expect(String(session.instructions)).toMatch(/Apresenta-te como Atende/);
+    expect(String(session.instructions)).toMatch(/1 clínica, 2 barbearia, 3 restaurante, 4 oficina, 5 imobiliária/);
+    expect(String(session.instructions)).toMatch(/select_demo_vertical/);
+    expect(String(session.instructions)).toMatch(/Clínica Central/);
+    expect(String(session.instructions)).toMatch(/Oficina Norte/);
+    expect(String(session.instructions)).toMatch(/Nunca dês conselhos médicos/);
+    expect(String(session.instructions)).toMatch(/reservas de mesa/);
+    expect(String(session.instructions)).not.toMatch(/Sofia/);
+    const names = (session.delegation as { responses: { tools: Array<{ name: string }> } }).responses.tools.map(
+      (t) => t.name,
+    );
+    expect(names[0]).toBe("select_demo_vertical");
+    expect(LIVE_PICKER_TOOLS.map((t) => t.name)).toContain("select_demo_vertical");
+    expect(buildDemoPickerLiveSessionConfig(businesses).type).toBe("live");
+  });
+
   it("SIP accept uses the chosen vertical and never leaks the API key", async () => {
     const store = tempStore();
     ensureDemoBusinesses(store);
@@ -100,6 +132,34 @@ describe("gpt-live-1 session config", () => {
       },
     });
     expect(parsed?.sessionId).toBe("sess_oficina");
+  });
+
+  it("SIP accept for the demo DID uses the picker session, not a prior vertical", async () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const businesses = ["clinica-central", "barbearia-lisboa", "restaurante-baixa", "oficina-norte", "imobiliaria-baixa"].map(
+      (slug) => store.getBusinessBySlug(slug)!,
+    );
+    const inbound = sessionForDemoDidInbound(businesses);
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(String(url)).toContain("/v1/live/sessions/sess_demo/accept");
+      const body = JSON.parse(String(init?.body)) as { session: { instructions: string; model: string } };
+      expect(body.session.model).toBe("gpt-live-1");
+      expect(body.session.instructions).toMatch(/Apresenta-te como Atende/);
+      expect(body.session.instructions).toMatch(/1 clínica/);
+      return new Response(null, { status: 200 });
+    });
+    const result = await acceptLiveIncomingCall({
+      sessionId: "sess_demo",
+      session: inbound.session,
+      slug: inbound.slug,
+      agentName: inbound.agentName,
+      apiKey: "sk-live-secret",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.slug).toBe(DEMO_PICKER_SLUG);
+    expect(JSON.stringify(result.body)).not.toContain("sk-live-secret");
   });
 
   it("posts SDP to /v1/live/sessions and never returns the API key", async () => {

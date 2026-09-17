@@ -11,7 +11,15 @@ import {
 } from "../scheduling/voiceSlots.js";
 import { isVoiceDemoSlug } from "../store/seed.js";
 import { DEFAULT_AGENT_NAME } from "../domain/agent.js";
-import { demoStreamUrl, rememberDemoChoice, resolveDemoSlugForInbound } from "./demoDid.js";
+import {
+  demoSlugForUseCase,
+  demoStreamUrl,
+  demoUseCaseFromChoice,
+  rememberDemoChoice,
+  rememberedDemoSlug,
+  resolveDemoSlugForInbound,
+} from "./demoDid.js";
+import { buildLiveInstructions } from "./gptLive.js";
 
 /** Never let a Cal.com (or other) hop block the voice tool loop. */
 export const VOICE_TOOL_TIMEOUT_MS = 1_500;
@@ -60,20 +68,6 @@ export function absolutePublicUrl(publicBaseUrl: string, path: string): string {
   return `${base}${suffix}`;
 }
 
-export function buildDemoIvrTeXML(publicBaseUrl: string): string {
-  const prompt =
-    "Olá, sou o Atende. Que demonstração quer ouvir: clínica, barbearia, restaurante, oficina ou imobiliária? Pode dizer o nome, ou premir 1 clínica, 2 barbearia, 3 restaurante, 4 oficina, 5 imobiliária.";
-  const action = absolutePublicUrl(publicBaseUrl, "/voice/incoming-demo");
-  return [
-    `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<Response>`,
-    `  <Gather numDigits="1" timeout="8" action="${escapeXml(action)}" method="POST" input="dtmf speech" language="pt-PT" hints="clínica,barbearia,restaurante,oficina,imobiliária">`,
-    `    <Say language="pt-PT">${escapeXml(prompt)}</Say>`,
-    `  </Gather>`,
-    `</Response>`,
-  ].join("\n");
-}
-
 export function buildDemoLiveTeXML(opts: {
   slug: string;
   publicBaseUrl: string;
@@ -117,15 +111,6 @@ export function handleDemoInbound(opts: {
     speech: opts.speech,
     now: opts.now,
   });
-  if (resolved.kind === "ivr") {
-    return buildDemoIvrTeXML(opts.publicBaseUrl);
-  }
-  rememberDemoChoice({
-    slug: resolved.slug,
-    fromE164: opts.fromE164,
-    callSid: opts.callSid,
-    now: opts.now,
-  });
   return buildDemoLiveTeXML({
     slug: resolved.slug,
     publicBaseUrl: opts.publicBaseUrl,
@@ -137,7 +122,7 @@ export function handleDemoInbound(opts: {
  * Inbound-call TeXML (Telnyx). Implements the core "Disponível / A cortar"
  * model: if a barber is available we warm-transfer the call to their mobile;
  * otherwise the AI assistant greets and (in production) takes the booking.
- * Demo DID inbound must not use this path — use buildDemoLiveTeXML / IVR.
+ * Demo DID inbound must not use this path — use buildDemoLiveTeXML.
  */
 export function buildIncomingTeXML(business: Business): string {
   const lang = VOICE_LANG[business.locale] ?? "pt-PT";
@@ -344,4 +329,98 @@ export async function handleVoiceFunction(
       return { error: "unknown_function", name: String(exhaustive) };
     }
   }
+}
+
+export const SELECT_DEMO_VERTICAL = "select_demo_vertical";
+
+function verticalFromToolArgs(args: Record<string, unknown>): ReturnType<typeof demoUseCaseFromChoice> {
+  return demoUseCaseFromChoice(String(args.vertical ?? args.useCase ?? args.slug ?? ""));
+}
+
+function omitPickerKeys(args: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...args };
+  delete next.vertical;
+  delete next.useCase;
+  delete next.slug;
+  return next;
+}
+
+/**
+ * DID picker session tools: lock a vertical, then dispatch booking tools to that tenant.
+ * GPT-Live cannot replace session instructions mid-call, so the picker prompt holds every
+ * vertical and this tool records the caller's choice for subsequent get_slots/book calls.
+ */
+export async function handleDemoPickerFunction(opts: {
+  store: Store;
+  scheduler: Scheduler;
+  call: VoiceFunctionCall;
+  fromE164?: string;
+  callSid?: string;
+  now?: Date;
+}): Promise<Record<string, unknown>> {
+  const nowDate = opts.now ?? new Date();
+  const now = nowDate.getTime();
+
+  if (opts.call.name === SELECT_DEMO_VERTICAL) {
+    const useCase = verticalFromToolArgs(opts.call.arguments);
+    if (!useCase) {
+      return {
+        ok: false,
+        error: "unknown_vertical",
+        instruction:
+          "Pergunta qual demonstração quer: clínica, barbearia, restaurante, oficina ou imobiliária (1 a 5).",
+      };
+    }
+    const slug = demoSlugForUseCase(useCase);
+    const business = opts.store.getBusinessBySlug(slug);
+    if (!business) {
+      return { ok: false, error: "business_not_found", slug };
+    }
+    rememberDemoChoice({
+      slug,
+      fromE164: opts.fromE164,
+      callSid: opts.callSid,
+      now,
+    });
+    return {
+      ok: true,
+      slug,
+      useCase,
+      businessName: business.name,
+      services: business.services.map((service) => service.name),
+      instruction: buildLiveInstructions(business),
+    };
+  }
+
+  const remembered = rememberedDemoSlug({
+    fromE164: opts.fromE164,
+    callSid: opts.callSid,
+    now,
+  });
+  const chosen = verticalFromToolArgs(opts.call.arguments) ?? (remembered ? demoUseCaseFromChoice(remembered) : undefined);
+  if (!chosen) {
+    return {
+      error: "select_vertical_first",
+      instruction:
+        "Ainda não há vertical. Pergunta qual demonstração quer ouvir e chama select_demo_vertical.",
+    };
+  }
+  const slug = demoSlugForUseCase(chosen);
+  const business = opts.store.getBusinessBySlug(slug);
+  if (!business) {
+    return { error: "business_not_found", slug };
+  }
+  rememberDemoChoice({
+    slug,
+    fromE164: opts.fromE164,
+    callSid: opts.callSid,
+    now,
+  });
+  return handleVoiceFunction(
+    business,
+    opts.store,
+    opts.scheduler,
+    { name: opts.call.name, arguments: omitPickerKeys(opts.call.arguments) },
+    nowDate,
+  );
 }

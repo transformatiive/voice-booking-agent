@@ -5,10 +5,13 @@ import {
   DEMO_DID_E164,
   DEMO_DID_NSN,
   DEMO_DID_TEL,
+  DEMO_PICKER_SLUG,
   bindDemoCaller,
   demoSlugForUseCase,
+  demoUseCaseFromChoice,
   formatDemoDidNational,
   isDemoDid,
+  isDemoPickerSlug,
   listDemoOptions,
   rememberDemoChoice,
   demoSlugFromSipHeaders,
@@ -82,19 +85,22 @@ describe("demo DID and use-case catalog", () => {
     ]);
   });
 
-  it("always asks on the call; DTMF and speech branch into the live vertical", () => {
+  it("always streams the Live picker; speech and DTMF are handled inside the session", () => {
     const now = 1_000_000;
     bindDemoCaller({ callerE164: "+351910000001", useCase: "barbearia", now, ttlMs: 30 * 60_000 });
     expect(
       resolveDemoSlugForInbound({ toE164: DEMO_DID_E164, fromE164: "+351910000001", now }),
-    ).toEqual({ kind: "ivr" });
+    ).toEqual({ kind: "live", slug: DEMO_PICKER_SLUG });
     expect(resolveDemoSlugForInbound({ toE164: DEMO_DID_E164, digits: "2", now })).toEqual({
-      kind: "slug",
-      slug: "barbearia-lisboa",
+      kind: "live",
+      slug: DEMO_PICKER_SLUG,
     });
     expect(
       resolveDemoSlugForInbound({ toE164: DEMO_DID_E164, speech: "quero a oficina", now }),
-    ).toEqual({ kind: "slug", slug: "oficina-norte" });
+    ).toEqual({ kind: "live", slug: DEMO_PICKER_SLUG });
+    expect(isDemoPickerSlug(DEMO_PICKER_SLUG)).toBe(true);
+    expect(demoUseCaseFromChoice("2")).toBe("barbearia");
+    expect(demoUseCaseFromChoice("oficina-norte")).toBe("oficina");
     expect(useCaseFromSpeech("imobiliária por favor")).toBe("imobiliaria");
   });
 
