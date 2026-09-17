@@ -88,7 +88,10 @@ Copy `.env.example` and fill only the integrations you want to activate.
 | POST | `/api/business/:slug/realtime/session` | Mint a Grok Live 2 ephemeral token for the demo |
 | POST | `/api/business/:slug/realtime/tool` | Execute a Grok function tool against the business |
 | POST | `/api/business/:slug/checkout` \| `/portal` | Stripe checkout / portal |
+| POST | `/voice/incoming` | Demo DID inbound TeXML (`Connect/Stream` or `Dial Sip`) |
 | POST | `/voice/incoming/:slug` | Inbound-call TeXML |
+| WS | `/voice/live-media` | Telnyx TeXML Stream ↔ gpt-live-1 media bridge |
+| POST | `/voice/openai-live` | OpenAI Direct SIP `live.transport.incoming` accept |
 | POST | `/voice/functions/:slug` | Voice-LLM function calls (`get_slots`, `book_appointment`, …) |
 | POST | `/webhooks/stripe` | Stripe subscription webhooks |
 
@@ -111,6 +114,19 @@ railway variables set PUBLIC_BASE_URL=https://<your-app>.up.railway.app
 Set integration variables (see `.env.example`) in the Railway service to light
 up Cal.com, Stripe, and Telnyx/Zadarma. Without them the service still boots and
 serves the demo.
+
+**Demo DID (`+351210210260`) — required for Live from the first second:**
+
+| Variable | Role |
+| --- | --- |
+| `PUBLIC_BASE_URL` | Public HTTPS origin. TeXML Stream uses `wss://$PUBLIC_BASE_URL/voice/live-media`. |
+| `OPENAI_API_KEY` | Bridges Telnyx PCMU media to `gpt-live-1` (picker session + `select_demo_vertical`). |
+| `OPENAI_LIVE_SIP_URI` | Optional. When set, inbound TeXML `Dial`s this SIP URI instead of Stream. |
+| `OPENAI_LIVE_BACKEND_MODEL` | Delegated Responses model (default `gpt-5.6-terra`). |
+
+Do not emit a Stream URL unless this service is serving `/voice/live-media` (this
+repo does). A GET without `Upgrade: websocket` returns **426**; Telnyx must
+WebSocket-upgrade the path.
 
 ### Persistence
 

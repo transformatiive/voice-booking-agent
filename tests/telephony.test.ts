@@ -132,6 +132,44 @@ describe("demo DID inbound TeXML", () => {
     expect(xml).not.toContain("<Say");
     expect(rememberedDemoSlug({ fromE164: "+351910000066", now: 4_000_000 })).toBeUndefined();
   });
+
+  it("never emits a Stream URL when the live-media WebSocket route is disabled", () => {
+    const xml = handleDemoInbound({
+      toE164: DEMO_DID_E164,
+      now: 5_000_000,
+      publicBaseUrl: "https://voice-booking-agent-production-c728.up.railway.app",
+      streamEnabled: false,
+    });
+    expect(xml).not.toContain("<Stream");
+    expect(xml).not.toContain("/voice/live-media");
+    expect(xml).not.toContain("<Gather");
+    expect(xml).not.toContain("<Say");
+    expect(xml).not.toContain("<Dial");
+  });
+
+  it("prefer Dial Sip over Stream when OPENAI_LIVE_SIP_URI is set", () => {
+    const xml = buildDemoLiveTeXML({
+      slug: DEMO_PICKER_SLUG,
+      publicBaseUrl: "https://atende.pt",
+      sipUri: "sip:proj_prod@sip.api.openai.com;transport=tls",
+      streamEnabled: true,
+    });
+    expect(xml).toContain("<Sip>sip:proj_prod@sip.api.openai.com;transport=tls</Sip>");
+    expect(xml).not.toContain("<Stream");
+    expect(xml).not.toContain("live-media");
+  });
+
+  it("Stream TeXML uses PCMU bidirectional RTP matching the live-media bridge", () => {
+    const xml = buildDemoLiveTeXML({
+      slug: DEMO_PICKER_SLUG,
+      publicBaseUrl: "https://atende.pt/",
+    });
+    expect(xml).toContain(`url="wss://atende.pt/voice/live-media?slug=${DEMO_PICKER_SLUG}"`);
+    expect(xml).toContain('bidirectionalMode="rtp"');
+    expect(xml).toContain('codec="PCMU"');
+    expect(xml).toContain('bidirectionalCodec="PCMU"');
+    expect(xml).toContain('bidirectionalSamplingRate="8000"');
+  });
 });
 
 describe("Telnyx orders stay provisioning until approved", () => {

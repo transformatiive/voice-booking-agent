@@ -64,7 +64,7 @@ export const config = {
     },
     openaiLiveBackendModel: env("OPENAI_LIVE_BACKEND_MODEL") ?? "gpt-5.6-terra",
     opsApproveSecret: env("OPS_APPROVE_SECRET"),
-    /** On demo DID inbound, Dial this SIP URI (ops: sip:$PROJECT_ID@sip.api.openai.com;transport=tls). */
+    /** Optional Direct SIP URI. When set, demo DID TeXML Dials Sip instead of Stream. */
     openaiLiveSipUri: env("OPENAI_LIVE_SIP_URI"),
   },
 
