@@ -104,6 +104,19 @@ function labelUseCase(useCase: UseCase) {
   }
 }
 
+function labelGender(gender: string) {
+  switch (gender) {
+    case "feminino":
+      return "Feminina";
+    case "masculino":
+      return "Masculina";
+    case "neutro":
+      return "Neutra";
+    default:
+      return gender;
+  }
+}
+
 function hm(min: number | null) {
   if (min == null) return "";
   return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
@@ -449,17 +462,19 @@ function Pending({
         {business.contactEmail ? ` · ${business.contactEmail}` : ""}
       </p>
       {demoActivate ? (
-        <Button
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            await fetch(`/api/business/${business.slug}/activate`, { method: "POST" });
-            await onActivated();
-            setBusy(false);
-          }}
-        >
-          Ver o backoffice (demonstração)
-        </Button>
+        <div>
+          <Button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await fetch(`/api/business/${business.slug}/activate`, { method: "POST" });
+              await onActivated();
+              setBusy(false);
+            }}
+          >
+            Ver o backoffice (demonstração)
+          </Button>
+        </div>
       ) : (
         <p className="text-sm text-muted-foreground">
           Avisamos por email quando o número for aprovado. O backoffice abre nessa altura.
@@ -560,7 +575,7 @@ function AssistantEditor({
             <FieldLabel>Voz</FieldLabel>
             <Select value={agentGender} onValueChange={(value) => value && setAgentGender(String(value))}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue>{labelGender(agentGender)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
@@ -575,7 +590,7 @@ function AssistantEditor({
             <FieldLabel>Idioma</FieldLabel>
             <Select value={locale} onValueChange={(value) => value && setLocale(String(value))}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue>{locale === "en" ? "Inglês" : "Português"}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
