@@ -91,6 +91,7 @@ describe("conteúdos SEO pt-PT", () => {
     expect(header).toContain("ContentMenu");
     expect(header).toContain("landing-header");
     expect(header).toContain("Conteúdos");
+    expect(readWeb("pages/Backoffice.tsx")).toContain("SiteHeader");
     expect(menu).toContain("NavigationMenu");
     expect(menu).toContain("data-content-menu");
     expect(menu).not.toMatch(/<select/);
