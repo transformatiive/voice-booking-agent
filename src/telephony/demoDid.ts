@@ -6,6 +6,8 @@ export const DEMO_DID_NSN = "210210260";
 export const DEMO_DID_DISPLAY = "21 021 0260";
 export const DEMO_DID_DISPLAY_INTL = "+351 21 021 0260";
 export const DEMO_DID_TEL = "tel:+351210210260";
+/** Virtual slug for DID inbound: one Live session that offers every demo vertical. */
+export const DEMO_PICKER_SLUG = "demo";
 
 export type DemoPickerUseCase = "clinica" | "barbearia" | "restaurante" | "oficina" | "imobiliaria";
 
@@ -163,8 +165,30 @@ export interface SipHeader {
   value: string;
 }
 
+export function isDemoPickerSlug(slug: string): boolean {
+  return slug === DEMO_PICKER_SLUG;
+}
+
 export function isDemoSlug(slug: string): boolean {
   return OPTIONS.some((option) => option.slug === slug);
+}
+
+export function demoUseCaseFromChoice(raw: string): DemoPickerUseCase | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const byDigit = ivrUseCaseForDigit(trimmed);
+  if (byDigit) {
+    return byDigit;
+  }
+  const exact = OPTIONS.find(
+    (option) => option.slug === trimmed || option.useCase === trimmed.toLowerCase(),
+  );
+  if (exact) {
+    return exact.useCase;
+  }
+  return useCaseFromSpeech(trimmed);
 }
 
 export function e164FromSipValue(value: string): string | undefined {
@@ -182,26 +206,14 @@ export function demoSlugFromSipHeaders(headers: SipHeader[], now: number): strin
   return rememberedDemoSlug({ fromE164, now });
 }
 
-export function resolveDemoSlugForInbound(opts: {
+export function resolveDemoSlugForInbound(_opts: {
   toE164: string;
   fromE164?: string;
   digits?: string;
   speech?: string;
   now: number;
-}): { kind: "slug"; slug: string } | { kind: "ivr" } {
-  if (opts.digits) {
-    const mapped = ivrUseCaseForDigit(opts.digits.trim());
-    if (mapped) {
-      return { kind: "slug", slug: demoSlugForUseCase(mapped) };
-    }
-  }
-  if (opts.speech) {
-    const spoken = useCaseFromSpeech(opts.speech);
-    if (spoken) {
-      return { kind: "slug", slug: demoSlugForUseCase(spoken) };
-    }
-  }
-  return { kind: "ivr" };
+}): { kind: "live"; slug: string } {
+  return { kind: "live", slug: DEMO_PICKER_SLUG };
 }
 
 export function demoStreamUrl(publicBaseUrl: string, slug: string): string {

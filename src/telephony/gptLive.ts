@@ -2,6 +2,7 @@ import type { AgentGender, Business, WeeklyHours } from "../domain/types.js";
 import { DEFAULT_AGENT_NAME } from "../domain/agent.js";
 import { greeting } from "../agent/conversation.js";
 import { config } from "../config.js";
+import { DEMO_PICKER_SLUG, listDemoOptions } from "./demoDid.js";
 
 export const LIVE_VOICE_MODEL = "gpt-live-1";
 export const LIVE_BACKEND_MODEL_DEFAULT = "gpt-5.6-terra";
@@ -83,6 +84,46 @@ export const LIVE_VOICE_TOOLS: LiveFunctionTool[] = [
       additionalProperties: false,
     },
   },
+];
+
+export const SELECT_DEMO_VERTICAL_TOOL: LiveFunctionTool = {
+  type: "function",
+  name: "select_demo_vertical",
+  description:
+    "Lock this call into one Atende demo vertical after the caller names it or says 1-5. Call once when they confirm.",
+  parameters: {
+    type: "object",
+    properties: {
+      vertical: {
+        type: "string",
+        description: "clinica, barbearia, restaurante, oficina, imobiliaria, or digit 1-5",
+      },
+    },
+    required: ["vertical"],
+    additionalProperties: false,
+  },
+};
+
+function withOptionalVertical(tool: LiveFunctionTool): LiveFunctionTool {
+  return {
+    ...tool,
+    parameters: {
+      ...tool.parameters,
+      properties: {
+        ...tool.parameters.properties,
+        vertical: {
+          type: "string",
+          description: "Demo vertical already chosen (clinica, barbearia, restaurante, oficina, imobiliaria).",
+        },
+      },
+    },
+  };
+}
+
+/** Tools for the DID picker session: choose a vertical, then book against that tenant. */
+export const LIVE_PICKER_TOOLS: LiveFunctionTool[] = [
+  SELECT_DEMO_VERTICAL_TOOL,
+  ...LIVE_VOICE_TOOLS.map(withOptionalVertical),
 ];
 
 export function liveVoiceForGender(gender: AgentGender): string {
@@ -262,6 +303,84 @@ export function buildLiveSessionConfig(business: Business): Record<string, unkno
   };
 }
 
+export function buildDemoPickerLiveInstructions(businesses: Business[]): string {
+  const bySlug = new Map(businesses.map((business) => [business.slug, business]));
+  const menu = listDemoOptions()
+    .map((option, index) => `${index + 1} ${option.label.toLowerCase()}`)
+    .join(", ");
+  const blocks = listDemoOptions().map((option, index) => {
+    const business = bySlug.get(option.slug);
+    const rules = business
+      ? buildLiveInstructions(business)
+      : `${option.label}: ${option.hint}.`;
+    return `Opção ${index + 1} (${option.useCase}): depois de confirmada, és a recepção da ${business?.name ?? option.label}. ${rules}`;
+  });
+  return [
+    `És o ${DEFAULT_AGENT_NAME}, o assistente de voz da Atende.`,
+    "Fala sempre português de Portugal (não brasileiro): usa «marcação», «telemóvel», «consulta», evita sotaque e vocabulário do Brasil (celular, vocês aí, a gente, horáriozinho).",
+    "Esta chamada é a demonstração Atende. A voz é Live desde o primeiro segundo — cumprimenta já, sem esperar que o cliente diga olá.",
+    `Apresenta-te como Atende e pergunta qual demonstração o cliente quer ouvir: ${menu}. Aceita o nome ou o número.`,
+    "Não digas que estás a transferir nem uses um menu robótico. Continua nesta chamada.",
+    "Até o cliente confirmar uma opção, não marques nada e não entres na recepção de um negócio.",
+    "Quando confirmar, chama select_demo_vertical com essa opção (nome ou 1-5) e a partir daí segue só as regras dessa opção. Se as ferramentas não estiverem disponíveis, entra na mesma na persona certa.",
+    "Não voltes a listar as opções a menos que peçam para mudar de demonstração.",
+    "Respostas curtas, estilo chamada telefónica — uma ou duas frases.",
+    ...blocks,
+  ].join(" ");
+}
+
+export function buildDemoPickerBackendInstructions(businesses: Business[]): string {
+  const bySlug = new Map(businesses.map((business) => [business.slug, business]));
+  const catalogs = listDemoOptions()
+    .map((option) => {
+      const business = bySlug.get(option.slug);
+      const services = business?.services.map((service) => service.name).join(", ") ?? option.hint;
+      return `${option.useCase} (${option.slug}): ${services}`;
+    })
+    .join(". ");
+  return [
+    "You are the Atende demo routing backend for a Portuguese (pt-PT) voice call.",
+    "Until select_demo_vertical succeeds, do not book. Call select_demo_vertical when the caller names a vertical or 1-5.",
+    "After that, call get_slots / book_appointment / list_bookings / cancel_appointment for that vertical. Pass vertical on each tool call.",
+    `Verticals: ${catalogs}.`,
+    "Never invent slots. Never give medical, legal, or mechanical advice.",
+  ].join(" ");
+}
+
+export function buildDemoPickerLiveSessionConfig(businesses: Business[]): Record<string, unknown> {
+  return {
+    type: "live",
+    model: LIVE_VOICE_MODEL,
+    instructions: buildDemoPickerLiveInstructions(businesses),
+    audio: {
+      output: {
+        voice: LIVE_VOICE_ID,
+      },
+    },
+    delegation: {
+      type: "responses",
+      responses: {
+        model: config.voice.openaiLiveBackendModel || LIVE_BACKEND_MODEL_DEFAULT,
+        tool_choice: "auto",
+        tools: LIVE_PICKER_TOOLS,
+        instructions: buildDemoPickerBackendInstructions(businesses),
+      },
+    },
+  };
+}
+
+export function sessionForDemoDidInbound(businesses: Business[]): {
+  slug: string;
+  agentName: string;
+  session: Record<string, unknown>;
+} {
+  return {
+    slug: DEMO_PICKER_SLUG,
+    agentName: DEFAULT_AGENT_NAME,
+    session: buildDemoPickerLiveSessionConfig(businesses),
+  };
+}
+
 export function parseToolArguments(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     return raw as Record<string, unknown>;
@@ -370,14 +489,22 @@ export function parseLiveIncomingWebhook(
 
 export async function acceptLiveIncomingCall(opts: {
   sessionId: string;
-  business: Business;
+  business?: Business;
+  session?: Record<string, unknown>;
+  slug?: string;
+  agentName?: string;
   apiKey: string | undefined;
   fetchImpl?: typeof fetch;
 }): Promise<{ status: number; body: Record<string, unknown> }> {
-  const session = buildLiveSessionConfig(opts.business);
+  const session = opts.session ?? (opts.business ? buildLiveSessionConfig(opts.business) : undefined);
+  const slug = opts.slug ?? opts.business?.slug;
+  const agentName = opts.agentName ?? opts.business?.agentName ?? DEFAULT_AGENT_NAME;
+  if (!session || !slug) {
+    return { status: 400, body: { error: "session_required" } };
+  }
   const body = {
-    slug: opts.business.slug,
-    agentName: opts.business.agentName || DEFAULT_AGENT_NAME,
+    slug,
+    agentName,
     model: LIVE_VOICE_MODEL,
     session,
   };
@@ -394,7 +521,7 @@ export async function acceptLiveIncomingCall(opts: {
     body: JSON.stringify({ session }),
   });
   if (!response.ok) {
-    return { status: 502, body: { error: "gpt_live_accept_failed", slug: opts.business.slug } };
+    return { status: 502, body: { error: "gpt_live_accept_failed", slug } };
   }
   return { status: 200, body };
 }
