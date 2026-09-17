@@ -19,7 +19,7 @@ import {
   rememberedDemoSlug,
   resolveDemoSlugForInbound,
 } from "./demoDid.js";
-import { buildLiveInstructions } from "./gptLive.js";
+import { greeting } from "../agent/conversation.js";
 
 /** Never let a Cal.com (or other) hop block the voice tool loop. */
 export const VOICE_TOOL_TIMEOUT_MS = 1_500;
@@ -340,6 +340,21 @@ export async function handleVoiceFunction(
 
 export const SELECT_DEMO_VERTICAL = "select_demo_vertical";
 
+/** Compact tool result so gpt-live speaks the vertical greeting instead of waiting for an instruction swap. */
+export function demoVerticalReadyResult(business: Business): Record<string, unknown> {
+  const speak = greeting(business);
+  return {
+    ok: true,
+    slug: business.slug,
+    useCase: business.useCase,
+    businessName: business.name,
+    services: business.services.map((service) => service.name),
+    speak,
+    message: speak,
+    instruction: `A opção está confirmada. Fala já como a recepção da ${business.name}. Não digas que estás a preparar o cenário, a carregar ou à espera de novas instruções — o GPT-Live não troca o guião a meio da chamada. Cumprimenta e pergunta o serviço.`,
+  };
+}
+
 function verticalFromToolArgs(args: Record<string, unknown>): ReturnType<typeof demoUseCaseFromChoice> {
   return demoUseCaseFromChoice(String(args.vertical ?? args.useCase ?? args.slug ?? ""));
 }
@@ -389,14 +404,7 @@ export async function handleDemoPickerFunction(opts: {
       callSid: opts.callSid,
       now,
     });
-    return {
-      ok: true,
-      slug,
-      useCase,
-      businessName: business.name,
-      services: business.services.map((service) => service.name),
-      instruction: buildLiveInstructions(business),
-    };
+    return demoVerticalReadyResult(business);
   }
 
   const remembered = rememberedDemoSlug({

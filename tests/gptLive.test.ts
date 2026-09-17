@@ -90,6 +90,11 @@ describe("gpt-live-1 session config", () => {
     expect(String(session.instructions)).toMatch(/Apresenta-te como Atende/);
     expect(String(session.instructions)).toMatch(/1 clínica, 2 barbearia, 3 restaurante, 4 oficina, 5 imobiliária/);
     expect(String(session.instructions)).toMatch(/select_demo_vertical/);
+    expect(String(session.instructions)).toMatch(/preparar o cenário/);
+    expect(String(session.instructions)).toMatch(/não troca o guião|não troca as instruções|já estão/i);
+    expect(String(session.delegation && (session.delegation as { responses?: { instructions?: string } }).responses?.instructions)).toMatch(
+      /speak|immediately|do not wait|instruction swap/i,
+    );
     expect(String(session.instructions)).toMatch(/Clínica Central/);
     expect(String(session.instructions)).toMatch(/Oficina Norte/);
     expect(String(session.instructions)).toMatch(/Nunca dês conselhos médicos/);
