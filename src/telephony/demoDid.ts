@@ -8,6 +8,8 @@ export const DEMO_DID_DISPLAY_INTL = "+351 21 021 0260";
 export const DEMO_DID_TEL = "tel:+351210210260";
 /** Virtual slug for DID inbound: one Live session that offers every demo vertical. */
 export const DEMO_PICKER_SLUG = "demo";
+/** Telnyx TeXML Stream WebSocket path (must exist or TeXML must not point here). */
+export const LIVE_MEDIA_PATH = "/voice/live-media";
 
 export type DemoPickerUseCase = "clinica" | "barbearia" | "restaurante" | "oficina" | "imobiliaria";
 
@@ -218,7 +220,7 @@ export function resolveDemoSlugForInbound(_opts: {
 
 export function demoStreamUrl(publicBaseUrl: string, slug: string): string {
   const base = publicBaseUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
-  return `${base.replace(/\/$/, "")}/voice/live-media?slug=${encodeURIComponent(slug)}`;
+  return `${base.replace(/\/$/, "")}${LIVE_MEDIA_PATH}?slug=${encodeURIComponent(slug)}`;
 }
 
 function normalizeE164(value: string): string {

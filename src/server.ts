@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
+import { createServer } from "node:http";
 import express from "express";
 import type { Request, Response } from "express";
 import { config, featureFlags, resolvedTelephonyProvider } from "./config.js";
@@ -16,6 +17,7 @@ import { TelephonyService } from "./telephony/index.js";
 import { buildIncomingTeXML, handleDemoInbound, handleDemoPickerFunction, handleVoiceFunction } from "./telephony/voice.js";
 import {
   acceptLiveIncomingCall,
+  buildLiveSessionConfig,
   createLiveWebRtcSession,
   parseLiveIncomingWebhook,
   parseToolArguments,
@@ -27,12 +29,14 @@ import {
   DEMO_DID_E164,
   DEMO_DID_NSN,
   DEMO_DID_TEL,
+  LIVE_MEDIA_PATH,
   bindDemoCaller,
   demoSlugForUseCase,
   isDemoDid,
   isDemoPickerSlug,
   listDemoOptions,
 } from "./telephony/demoDid.js";
+import { attachLiveMedia } from "./telephony/liveMedia.js";
 import { consumeSessionQuota } from "./telephony/sessionLimit.js";
 import { MARKETING_DEMO_SLUG, ensureDemoBusinesses } from "./store/seed.js";
 
@@ -388,6 +392,11 @@ app.post("/voice/incoming-demo", (req, res) => {
   res.type("text/xml").send(demoInboundXml(req));
 });
 
+/** Plain GET is not a Stream handshake — Telnyx upgrades this path over WebSocket. */
+app.get(LIVE_MEDIA_PATH, (_req, res) => {
+  res.status(426).set("Upgrade", "websocket").type("text/plain").send("Upgrade Required");
+});
+
 app.post("/voice/incoming", (req, res) => {
   const to = String(req.body?.To ?? req.body?.to ?? "");
   if (isDemoDid(to) || to === config.demoDidE164) {
@@ -517,12 +526,52 @@ async function main(): Promise<void> {
       console.warn("[dev] Vite middleware unavailable:", err instanceof Error ? err.message : err);
     }
   }
-  app.listen(config.port, () => {
+  const server = createServer(app);
+  attachLiveMedia(server, {
+    openaiApiKey: config.voice.openaiApiKey,
+    sessionForSlug: (slug) => {
+      if (isDemoPickerSlug(slug)) {
+        return sessionForDemoDidInbound(demoPickerBusinesses());
+      }
+      const business = store.getBusinessBySlug(slug);
+      if (!business) {
+        return undefined;
+      }
+      return {
+        slug: business.slug,
+        agentName: business.agentName || DEFAULT_AGENT_NAME,
+        session: buildLiveSessionConfig(business),
+      };
+    },
+    handleTool: async (call, ctx) => {
+      if (isDemoPickerSlug(ctx.slug)) {
+        return handleDemoPickerFunction({
+          store,
+          scheduler,
+          call,
+          fromE164: ctx.fromE164,
+          callSid: ctx.callSid,
+        });
+      }
+      const business = store.getBusinessBySlug(ctx.slug);
+      if (!business) {
+        return { error: "business_not_found", slug: ctx.slug };
+      }
+      return handleVoiceFunction(business, store, scheduler, call);
+    },
+  });
+  server.listen(config.port, () => {
     console.log(`voice-agents listening on ${config.publicBaseUrl}`);
     console.log(
       `persistence=${persistence.kind}, features=${JSON.stringify(featureFlags())}, telephony=${resolvedTelephonyProvider()}`,
     );
   });
+}
+
+function demoPickerBusinesses(): Business[] {
+  return listDemoOptions()
+    .map((option) => store.getBusinessBySlug(option.slug))
+    .filter((business): business is Business => Boolean(business));
 }
 
 const USE_CASES: UseCase[] = [

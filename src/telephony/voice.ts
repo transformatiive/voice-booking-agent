@@ -72,6 +72,8 @@ export function buildDemoLiveTeXML(opts: {
   slug: string;
   publicBaseUrl: string;
   sipUri?: string;
+  /** When false, never emit Connect/Stream (used if the WS route is not mounted). */
+  streamEnabled?: boolean;
 }): string {
   if (opts.sipUri) {
     return [
@@ -83,12 +85,15 @@ export function buildDemoLiveTeXML(opts: {
       `</Response>`,
     ].join("\n");
   }
+  if (opts.streamEnabled === false) {
+    return [`<?xml version="1.0" encoding="UTF-8"?>`, `<Response>`, `</Response>`].join("\n");
+  }
   const streamUrl = demoStreamUrl(opts.publicBaseUrl, opts.slug);
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<Response>`,
     `  <Connect>`,
-    `    <Stream url="${escapeXml(streamUrl)}" bidirectionalMode="rtp"></Stream>`,
+    `    <Stream url="${escapeXml(streamUrl)}" bidirectionalMode="rtp" codec="PCMU" bidirectionalCodec="PCMU" bidirectionalSamplingRate="8000"></Stream>`,
     `  </Connect>`,
     `</Response>`,
   ].join("\n");
@@ -103,6 +108,7 @@ export function handleDemoInbound(opts: {
   now: number;
   publicBaseUrl: string;
   sipUri?: string;
+  streamEnabled?: boolean;
 }): string {
   const resolved = resolveDemoSlugForInbound({
     toE164: opts.toE164,
@@ -115,6 +121,7 @@ export function handleDemoInbound(opts: {
     slug: resolved.slug,
     publicBaseUrl: opts.publicBaseUrl,
     sipUri: opts.sipUri,
+    streamEnabled: opts.streamEnabled,
   });
 }
 
