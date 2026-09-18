@@ -80,22 +80,21 @@ describe("clinic marketing demo", () => {
     expect(LIVE_VOICE_MODEL).toBe("gpt-live-1");
   });
 
-  it("homepage picker lists use-cases and the demo DID", () => {
+  it("homepage shows the teal ATENDE landing and the demo DID", () => {
     const landing = readWeb("pages/Landing.tsx");
     const voice = readWeb("lib/voice-call.ts");
-    expect(landing).toContain("data-demo-use-case");
+    expect(landing).toContain("O telefone do seu negócio deixa de ficar sem resposta.");
+    expect(landing).toContain("ATEND");
+    expect(landing).toContain("oklch(0.50 0.13 168)");
     expect(landing).toContain("210210260");
     expect(landing).toContain("21 021 0260");
     expect(landing).toContain("+351 21 021 0260");
     expect(landing).toContain("+351210210260");
     expect(landing).toContain("tel:+351210210260");
-    expect(landing).toContain("Ligar para ouvir a demo");
-    expect(landing).toContain("did.nsn");
-    expect(landing).toMatch(/pergunta que demonstração|clínica, barbearia, restaurante, oficina ou imobiliária/);
-    expect(landing).toContain("Ou fale aqui no browser");
-    expect(landing).toContain("selectedUseCase");
+    expect(landing).toContain("Ligar e experimentar");
+    expect(landing).toContain("Ver planos");
     expect(landing).toContain("/api/demo");
-    expect(landing).toContain("Iniciar chamada");
+    expect(landing).toMatch(/clínica, barbearia, restaurante, oficina ou imobiliária/);
     expect(landing).not.toMatch(/href="\/demo\//);
     expect(landing).not.toContain("Sofia");
     expect(landing).not.toMatch(/Grok/);
@@ -126,11 +125,11 @@ describe("clinic marketing demo", () => {
     expect(landing).toContain("45 minutos");
     expect(PLANS.base.displayName).toBe("Essencial");
     expect(PLANS.studio.displayName).toBe("Estúdio");
-    expect(landing).toMatch(/data-demo-use-case="clinica"/);
-    expect(landing).toMatch(/data-demo-use-case="barbearia"/);
-    expect(landing).toMatch(/data-demo-use-case="restaurante"/);
-    expect(landing).toMatch(/data-demo-use-case="oficina"/);
-    expect(landing).toMatch(/data-demo-use-case="imobiliaria"/);
+    expect(landing).toContain('value: "clinica"');
+    expect(landing).toContain('value: "barbearia"');
+    expect(landing).toContain('value: "restaurante"');
+    expect(landing).toContain('value: "oficina"');
+    expect(landing).toContain('value: "imobiliaria"');
   });
 
   it("voice client requests a follow-up after tools so Atende does not stall", () => {
@@ -149,7 +148,5 @@ describe("clinic marketing demo", () => {
     expect(app).toContain("SelectTrigger");
     expect(app).not.toMatch(/<select/);
     expect(app).not.toMatch(/Grok|Sofia/);
-    const landing = readWeb("pages/Landing.tsx");
-    expect(landing).not.toMatch(/<select/);
   });
 });
