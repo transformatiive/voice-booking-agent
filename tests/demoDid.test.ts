@@ -16,6 +16,7 @@ import {
   rememberDemoChoice,
   demoSlugFromSipHeaders,
   rememberedDemoSlug,
+  rememberDemoVerticalFromTranscript,
   resolveDemoSlugForInbound,
   useCaseFromSpeech,
 } from "../src/telephony/demoDid.js";
@@ -102,6 +103,63 @@ describe("demo DID and use-case catalog", () => {
     expect(demoUseCaseFromChoice("2")).toBe("barbearia");
     expect(demoUseCaseFromChoice("oficina-norte")).toBe("oficina");
     expect(useCaseFromSpeech("imobiliária por favor")).toBe("imobiliaria");
+  });
+
+  it("remembers the chosen vertical from caller speech or 1–5, not from the Atende menu", () => {
+    const now = 3_000_000;
+    expect(
+      rememberDemoVerticalFromTranscript({
+        text: "1 clínica, 2 barbearia, 3 restaurante, 4 oficina, 5 imobiliária",
+        fromE164: "+351910000010",
+        callSid: "CA_menu",
+        now,
+        source: "output",
+      }),
+    ).toBeUndefined();
+    expect(
+      rememberDemoVerticalFromTranscript({
+        text: "quero a oficina",
+        fromE164: "+351910000010",
+        callSid: "CA_menu",
+        now,
+        source: "input",
+      }),
+    ).toBe("oficina-norte");
+    expect(rememberedDemoSlug({ fromE164: "+351910000010", callSid: "CA_menu", now })).toBe("oficina-norte");
+    expect(
+      rememberDemoVerticalFromTranscript({
+        text: "clínica",
+        fromE164: "+351910000010",
+        callSid: "CA_menu",
+        now,
+        source: "input",
+      }),
+    ).toBe("oficina-norte");
+
+    expect(
+      rememberDemoVerticalFromTranscript({
+        text: "opção quatro",
+        fromE164: "+351910000011",
+        now,
+        source: "input",
+      }),
+    ).toBe("oficina-norte");
+    expect(
+      rememberDemoVerticalFromTranscript({
+        text: "5",
+        fromE164: "+351910000012",
+        now,
+        source: "input",
+      }),
+    ).toBe("imobiliaria-baixa");
+    expect(
+      rememberDemoVerticalFromTranscript({
+        text: "Olá, Oficina Norte — quer Diagnóstico, Revisão ou Pneus?",
+        fromE164: "+351910000013",
+        now,
+        source: "output",
+      }),
+    ).toBe("oficina-norte");
   });
 
   it("maps SIP From headers to the vertical chosen on the IVR", () => {

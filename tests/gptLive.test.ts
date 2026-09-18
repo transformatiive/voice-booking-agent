@@ -92,9 +92,10 @@ describe("gpt-live-1 session config", () => {
     expect(instructions).toMatch(/ecrã/);
     expect(instructions).toMatch(/Apresenta-te como Atende/);
     expect(instructions).toMatch(/1 clínica, 2 barbearia, 3 restaurante, 4 oficina, 5 imobiliária/);
-    expect(instructions).toMatch(/select_demo_vertical/);
+    expect(instructions).not.toMatch(/select_demo_vertical/);
+    expect(instructions).toMatch(/Não chames nenhuma ferramenta para escolher/);
     expect(instructions).toMatch(/Não digas «perfeito»/);
-    expect(instructions).toMatch(/guião completo já está|as regras de cada opção já estão/i);
+    expect(instructions).toMatch(/as regras de cada opção já estão/i);
     expect(instructions).toMatch(/Clínica Central/);
     expect(instructions).toMatch(/Nunca dês conselhos médicos/);
     expect(instructions).toMatch(/Barbearia Lisboa/);
@@ -111,14 +112,17 @@ describe("gpt-live-1 session config", () => {
     const backend = String(
       session.delegation && (session.delegation as { responses?: { instructions?: string } }).responses?.instructions,
     );
-    expect(backend).toMatch(/select_demo_vertical/);
-    expect(backend).toMatch(/stay on this Live session|Never wait for a new session/);
+    expect(backend).not.toMatch(/select_demo_vertical/);
+    expect(backend).toMatch(/Do not call a tool when the caller picks a vertical/);
     expect(backend).toMatch(/oficina-norte/);
     const names = (session.delegation as { responses: { tools: Array<{ name: string }> } }).responses.tools.map(
       (t) => t.name,
     );
-    expect(names[0]).toBe("select_demo_vertical");
-    expect(LIVE_PICKER_TOOLS.map((t) => t.name)).toContain("select_demo_vertical");
+    expect(names).not.toContain("select_demo_vertical");
+    expect(names.sort()).toEqual(
+      ["book_appointment", "cancel_appointment", "get_slots", "list_bookings", "list_services"].sort(),
+    );
+    expect(LIVE_PICKER_TOOLS.map((t) => t.name)).not.toContain("select_demo_vertical");
     expect(buildDemoPickerLiveSessionConfig(businesses).type).toBe("live");
   });
 

@@ -139,10 +139,12 @@ describe("voice demo slots", () => {
         },
       },
       NOW,
-    )) as { ok: boolean; bookingId: string; speak: string; smsConfirmation: boolean };
+    )) as { ok: boolean; bookingId: string; speak: string; message: string; smsConfirmation: boolean };
     expect(booked.ok).toBe(true);
     expect(booked.smsConfirmation).toBe(true);
+    expect(booked.speak).toMatch(/Está marcada/);
     expect(booked.speak).toMatch(/Envio confirmação por SMS/);
+    expect(booked.message).toBe(booked.speak);
     expect(store.listBookings(business.id)).toHaveLength(1);
     expect(store.listBookings(business.id)[0].customerName).toBe("Ana Sousa");
   });

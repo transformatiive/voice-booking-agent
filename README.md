@@ -120,7 +120,7 @@ serves the demo.
 | Variable | Role |
 | --- | --- |
 | `PUBLIC_BASE_URL` | Public HTTPS origin. TeXML Stream uses `wss://$PUBLIC_BASE_URL/voice/live-media`. |
-| `OPENAI_API_KEY` | Bridges Telnyx PCMU media to `gpt-live-1` (picker session + `select_demo_vertical`). |
+| `OPENAI_API_KEY` | Bridges Telnyx PCMU media to `gpt-live-1` (one picker session; booking tools only). |
 | `OPENAI_LIVE_SIP_URI` | Optional. When set, inbound TeXML `Dial`s this SIP URI instead of Stream. |
 | `OPENAI_LIVE_BACKEND_MODEL` | Delegated Responses model (default `gpt-5.6-terra`). |
 

@@ -86,24 +86,6 @@ export const LIVE_VOICE_TOOLS: LiveFunctionTool[] = [
   },
 ];
 
-export const SELECT_DEMO_VERTICAL_TOOL: LiveFunctionTool = {
-  type: "function",
-  name: "select_demo_vertical",
-  description:
-    "Lock this call into one Atende demo vertical after the caller names it or says 1-5. Call once when they confirm.",
-  parameters: {
-    type: "object",
-    properties: {
-      vertical: {
-        type: "string",
-        description: "clinica, barbearia, restaurante, oficina, imobiliaria, or digit 1-5",
-      },
-    },
-    required: ["vertical"],
-    additionalProperties: false,
-  },
-};
-
 function withOptionalVertical(tool: LiveFunctionTool): LiveFunctionTool {
   return {
     ...tool,
@@ -120,11 +102,8 @@ function withOptionalVertical(tool: LiveFunctionTool): LiveFunctionTool {
   };
 }
 
-/** Tools for the DID picker session: choose a vertical, then book against that tenant. */
-export const LIVE_PICKER_TOOLS: LiveFunctionTool[] = [
-  SELECT_DEMO_VERTICAL_TOOL,
-  ...LIVE_VOICE_TOOLS.map(withOptionalVertical),
-];
+/** Booking tools only. Scenario choice is not a tool — the live prompt already holds every guião. */
+export const LIVE_PICKER_TOOLS: LiveFunctionTool[] = LIVE_VOICE_TOOLS.map(withOptionalVertical);
 
 export function liveVoiceForGender(gender: AgentGender): string {
   switch (gender) {
@@ -177,7 +156,7 @@ export function buildLiveInstructions(business: Business): string {
       `Timezone: ${business.timezone}. Hours: ${hours}. Services: ${services}.`,
       ...verticalLiveRules(business),
       "Use tools for availability and booking. Never invent free slots. Only confirm a booking after book_appointment returns ok.",
-      "After a tool returns, speak the result immediately using the speak/message fields. Never stall with 'one moment', 'starting', or filler — the caller must hear times or a taken-slot alternative in the same turn.",
+      "After a tool returns, speak the result immediately: the date, the time, and whether it is booked. Never stall with 'one moment', 'starting', or filler — the caller must hear times or a taken-slot alternative in the same turn.",
       "Ask the customer's name before booking. If a tool errors, say so briefly and offer another time.",
       "Short phone replies; delegate availability and booking; never invent slots.",
       "Do not introduce yourself as a product demo. You are the live receptionist for this business.",
@@ -191,7 +170,7 @@ export function buildLiveInstructions(business: Business): string {
     `Fuso: ${business.timezone}. Horário: ${hours}. Serviços: ${services}.`,
     ...verticalLiveRules(business),
     "Usa as ferramentas para disponibilidade e marcações. Nunca inventes horários livres. Só confirma uma marcação depois de book_appointment devolver ok.",
-    "Assim que uma ferramenta devolver, diz já o resultado em voz alta (usa os campos speak/message). Nunca fiques em «um momento», «a começar» ou a pensar — o cliente tem de ouvir horários ou uma alternativa na mesma vez.",
+    "Assim que uma ferramenta devolver, diz já o resultado em voz alta: a data, a hora, e se ficou marcada. Nunca fiques em «um momento», «a começar» ou a pensar — o cliente tem de ouvir horários ou uma alternativa na mesma vez.",
     "Pede o nome do cliente antes de marcar. Se uma ferramenta falhar, diz-o em breve e oferece outra hora.",
     "Respostas curtas ao telefone; delega disponibilidade e marcações; nunca inventes horários.",
     "Não te apresentes como uma demo de produto. És a recepção ao vivo deste negócio.",
@@ -328,9 +307,8 @@ export function buildDemoPickerLiveInstructions(businesses: Business[]): string 
     `Apresenta-te como Atende e pergunta qual demonstração o cliente quer ouvir: ${menu}. Aceita o nome ou o número.`,
     "Não digas que estás a transferir nem uses um menu robótico. Continua nesta chamada.",
     "Até o cliente confirmar uma opção, não marques nada e não entres na recepção de um negócio.",
-    "Quando confirmar, chama select_demo_vertical com essa opção (nome ou 1-5) e a partir daí segue só as regras dessa opção — o guião completo já está nestas instruções. Se as ferramentas não estiverem disponíveis, entra na mesma na persona certa.",
-    "Não digas «perfeito», «vamos à oficina», nem que estás a transferir ou a preparar. Não acabes a vez nessa confirmação: a tua próxima fala é já a saudação da recepção desse negócio (nome e o primeiro pedido do cenário).",
-    "Quando o select_demo_vertical devolver ok, fala já o speak/message — a saudação em personagem — e continua esse guião (serviços, perguntas, o que nunca fazer, horários reais com as ferramentas). Nunca digas que estás a preparar o cenário, a carregar, a transferir ou à espera de novas instruções: o GPT-Live não troca o guião a meio da chamada; as regras de cada opção já estão aqui.",
+    "Quando confirmar o nome ou o número (1-5), fala já como a recepção dessa opção — a saudação e a pergunta seguinte do guião que já está nestas instruções. Não chames nenhuma ferramenta para escolher o cenário. Não esperes por um resultado. Não digas «perfeito», «a preparar», «vamos à oficina», nem que estás a transferir.",
+    "As ferramentas (get_slots, book_appointment, list_bookings, cancel_appointment) só existem para horários reais e marcações, depois de estares na personagem. Passa vertical em cada chamada. Nunca inventes horários. O GPT-Live não troca o guião a meio da chamada; as regras de cada opção já estão aqui.",
     "Não voltes a listar as opções a menos que peçam para mudar de demonstração.",
     "Respostas curtas, estilo chamada telefónica — uma ou duas frases.",
     ...blocks,
@@ -347,10 +325,9 @@ export function buildDemoPickerBackendInstructions(businesses: Business[]): stri
     })
     .join(". ");
   return [
-    "You are the Atende demo routing backend for a Portuguese (pt-PT) voice call.",
-    "Until select_demo_vertical succeeds, do not book. Call select_demo_vertical when the caller names a vertical or 1-5.",
-    "After select_demo_vertical succeeds, stay on this Live session. The next utterance is the speak/message in-character greeting, then follow that vertical's receptionist script already in the live instructions. Do not stop at «perfeito». Never wait for a new session or an instruction swap.",
-    "After that, call get_slots / book_appointment / list_bookings / cancel_appointment for that vertical. Pass vertical on each tool call.",
+    "You are the Atende demo booking backend for a Portuguese (pt-PT) voice call.",
+    "Do not call a tool when the caller picks a vertical. The live model already has every receptionist script and greets in character without you.",
+    "Call get_slots / book_appointment / list_bookings / cancel_appointment only for real availability and booking. Pass vertical (clinica, barbearia, restaurante, oficina, imobiliaria) on each tool call.",
     `Verticals: ${catalogs}.`,
     "Never invent slots. Never give medical, legal, or mechanical advice.",
   ].join(" ");

@@ -2,7 +2,7 @@ import type { IncomingMessage } from "node:http";
 import type { Server as HttpServer } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import { DEMO_PICKER_SLUG, LIVE_MEDIA_PATH } from "./demoDid.js";
+import { DEMO_PICKER_SLUG, LIVE_MEDIA_PATH, rememberDemoVerticalFromTranscript } from "./demoDid.js";
 import { parseToolArguments } from "./gptLive.js";
 
 export { LIVE_MEDIA_PATH };
@@ -126,6 +126,8 @@ class LiveMediaBridge {
   private fromE164: string | undefined;
   private callSid: string | undefined;
   private readonly handledTools = new Set<string>();
+  private inputTranscript = "";
+  private outputTranscript = "";
 
   constructor(
     private readonly opts: {
@@ -255,6 +257,25 @@ class LiveMediaBridge {
         }
         return;
       }
+      case "session.input_transcript.delta":
+      case "session.output_transcript.delta": {
+        const delta = typeof event.delta === "string" ? event.delta : undefined;
+        if (delta) {
+          const source = type === "session.input_transcript.delta" ? "input" : "output";
+          if (source === "input") {
+            this.inputTranscript += ` ${delta}`;
+          } else {
+            this.outputTranscript += ` ${delta}`;
+          }
+          rememberDemoVerticalFromTranscript({
+            text: source === "input" ? this.inputTranscript : this.outputTranscript,
+            fromE164: this.fromE164,
+            callSid: this.callSid,
+            source,
+          });
+        }
+        return;
+      }
       case "response.event": {
         const inner = event.event && typeof event.event === "object" ? (event.event as Record<string, unknown>) : undefined;
         if (inner) {
@@ -315,6 +336,18 @@ class LiveMediaBridge {
         output: JSON.stringify(output),
       },
     });
+    const spoken = speakableToolSentence(output);
+    if (spoken) {
+      // Docs (live-delegation, live-migration): session.commentary.append is the
+      // event that asks the live model to speak; it paraphrases (not verbatim).
+      // response.create continues Responses work and does not authorize speech.
+      this.sendOpenAi({
+        type: "session.commentary.append",
+        event_id: `tool-speak-${call.callId}`,
+        delegation_id: null,
+        content: spoken,
+      });
+    }
     this.sendOpenAi({ type: "response.create", event_id: `tool-continue-${call.callId}` });
   }
 
@@ -359,7 +392,12 @@ function stringField(rec: Record<string, unknown>, key: string): string | undefi
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-const AUDIO_EVENT_TYPES = new Set(["session.output_audio.delta", "session.input_audio.append"]);
+const AUDIO_EVENT_TYPES = new Set([
+  "session.output_audio.delta",
+  "session.input_audio.append",
+  "session.input_transcript.delta",
+  "session.output_transcript.delta",
+]);
 
 /** Full error payload — production sliced this at 400 chars and hid the Responses cause. */
 export function formatLiveErrorEvent(event: Record<string, unknown>): string {
@@ -414,4 +452,9 @@ export function completedFunctionCallFromDelegatedEvent(
     return undefined;
   }
   return { name, callId, arguments: parseToolArguments(rec.arguments) };
+}
+
+/** Short sentence from a booking tool result, for session.commentary.append. */
+export function speakableToolSentence(output: Record<string, unknown>): string | undefined {
+  return stringField(output, "speak") ?? stringField(output, "message");
 }
