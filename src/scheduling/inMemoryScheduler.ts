@@ -51,7 +51,7 @@ export class InMemoryScheduler implements Scheduler {
       businessId: input.business.id,
       serviceId: input.service.id,
       serviceName: input.service.name,
-      resourceId: input.resourceId,
+      resourceId: availability.resource.id,
       customerName: input.customerName,
       customerPhone: input.customerPhone,
       start: input.start.toISOString(),

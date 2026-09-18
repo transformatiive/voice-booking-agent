@@ -17,7 +17,7 @@ export interface BookInput {
 
 export type BookResult =
   | { ok: true; booking: Booking }
-  | { ok: false; reason: "past" | "closed_day" | "outside_hours" | "conflict" | "error" };
+  | { ok: false; reason: "past" | "closed_day" | "outside_hours" | "conflict" | "no_resource" | "error" };
 
 /**
  * The scheduling brain. Cal.com is the production implementation; the in-memory

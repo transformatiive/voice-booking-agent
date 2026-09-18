@@ -65,6 +65,7 @@ export class BillingService {
     }
     const customer = await this.stripe.customers.create({
       name: business.name,
+      email: business.contactEmail ?? undefined,
       metadata: { businessId: business.id, slug: business.slug },
     });
     business.subscription.stripeCustomerId = customer.id;
@@ -120,6 +121,95 @@ export class BillingService {
     return { url: session.url };
   }
 
+  /**
+   * Report overage minutes to the metered Stripe item. Returns false when Stripe
+   * is not configured — usage is still stored locally; we never fake a charge.
+   */
+  async reportOverageMinutes(business: Business, minutes: number): Promise<boolean> {
+    if (!this.stripe || minutes <= 0) {
+      return false;
+    }
+    const subscriptionId = business.subscription.stripeSubscriptionId;
+    const overagePrice = config.billing.priceOverage;
+    if (!subscriptionId || !overagePrice) {
+      return false;
+    }
+    try {
+      const sub = await this.stripe.subscriptions.retrieve(subscriptionId);
+      const item = sub.items.data.find((entry) => {
+        const price = entry.price;
+        return typeof price === "object" && price?.id === overagePrice;
+      });
+      if (!item) {
+        return false;
+      }
+      await this.stripe.subscriptionItems.createUsageRecord(item.id, {
+        quantity: minutes,
+        timestamp: Math.floor(Date.now() / 1000),
+        action: "increment",
+      });
+      return true;
+    } catch (err) {
+      console.error("[billing] overage report failed:", err instanceof Error ? err.message : err);
+      return false;
+    }
+  }
+
+  async changePlan(business: Business, planId: PlanId): Promise<{ url: string } | { error: string }> {
+    if (!this.stripe) {
+      return { error: "stripe_not_configured" };
+    }
+    const priceId = this.priceIdForPlan(planId);
+    if (!priceId) {
+      return { error: `missing_price_for_${planId}` };
+    }
+    if (!business.subscription.stripeSubscriptionId) {
+      return this.createCheckoutSession(business, planId);
+    }
+    try {
+      const sub = await this.stripe.subscriptions.retrieve(business.subscription.stripeSubscriptionId);
+      const planItem = sub.items.data.find((entry) => {
+        const price = entry.price;
+        const id = typeof price === "object" ? price?.id : undefined;
+        return id === config.billing.priceBase || id === config.billing.pricePro || id === config.billing.priceStudio;
+      }) ?? sub.items.data[0];
+      if (!planItem) {
+        return this.createCheckoutSession(business, planId);
+      }
+      await this.stripe.subscriptions.update(sub.id, {
+        items: [{ id: planItem.id, price: priceId }],
+        proration_behavior: "create_prorations",
+        metadata: { businessId: business.id, planId },
+      });
+      business.subscription.planId = planId;
+      business.subscription.includedMinutes = PLANS[planId].includedMinutes;
+      this.store.saveBusiness(business);
+      return { url: `${config.publicBaseUrl}/app/${business.slug}?billing=updated` };
+    } catch (err) {
+      console.error("[billing] changePlan failed:", err instanceof Error ? err.message : err);
+      return this.createCheckoutSession(business, planId);
+    }
+  }
+
+  async cancelSubscription(business: Business): Promise<{ url: string } | { canceled: true } | { error: string }> {
+    if (!this.stripe) {
+      return { error: "stripe_not_configured" };
+    }
+    if (business.subscription.stripeSubscriptionId) {
+      try {
+        await this.stripe.subscriptions.update(business.subscription.stripeSubscriptionId, {
+          cancel_at_period_end: true,
+        });
+        business.subscription.status = "canceled";
+        this.store.saveBusiness(business);
+        return { canceled: true };
+      } catch (err) {
+        console.error("[billing] cancel failed:", err instanceof Error ? err.message : err);
+      }
+    }
+    return this.createPortalSession(business);
+  }
+
   /** Verify and apply a Stripe webhook event to the matching business. */
   async handleWebhook(rawBody: Buffer, signature: string | undefined): Promise<{ received: boolean }> {
     if (!this.stripe || !config.billing.stripeWebhookSecret || !signature) {
@@ -157,7 +247,11 @@ export class BillingService {
     business.subscription.planId = planId;
     business.subscription.includedMinutes = PLANS[planId].includedMinutes;
     business.subscription.status = mapStatus(sub.status);
+    const periodStart = (sub as unknown as { current_period_start?: number }).current_period_start;
     const periodEnd = (sub as unknown as { current_period_end?: number }).current_period_end;
+    business.subscription.currentPeriodStart = periodStart
+      ? new Date(periodStart * 1000).toISOString()
+      : business.subscription.currentPeriodStart;
     business.subscription.currentPeriodEnd = periodEnd
       ? new Date(periodEnd * 1000).toISOString()
       : null;

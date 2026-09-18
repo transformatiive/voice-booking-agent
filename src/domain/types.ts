@@ -25,11 +25,17 @@ export interface Service {
 
 export interface Resource {
   id: string;
-  /** Display name, e.g. the barber's name. */
+  /** Display name — doctor, barber, consultant, photographer, etc. */
   name: string;
-  /** Mobile number (E.164) used for warm transfers. */
+  /** Free-text role/type (médico, terapeuta, barbeiro, consultor…). */
+  role: string;
+  /** Services this person can perform. Empty means none assigned yet. */
+  serviceIds: string[];
+  /** Optional hours; null inherits the business-wide timetable. */
+  hours: WeeklyHours | null;
+  /** Mobile number (E.164) used for warm transfers. Routing/IVR is out of scope. */
   transferNumber: string | null;
-  /** "Disponível" (accepts warm transfers) vs "A cortar" (busy). */
+  /** Availability hook: can take bookings right now. */
   available: boolean;
   /** Cal.com user/member id when using per-resource calendars. */
   calUserId: number | null;
@@ -71,6 +77,11 @@ export interface Subscription {
   stripeSubscriptionId: string | null;
   includedMinutes: number;
   usedMinutes: number;
+  /** Minutes billed above the included allowance in the current period. */
+  overageMinutes: number;
+  /** Signup / plan-start timestamp; usage resets on each monthly anniversary. */
+  planStartedAt: string;
+  currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
 }
 
@@ -97,6 +108,10 @@ export interface Business {
   resources: Resource[];
   number: PhoneNumber | null;
   subscription: Subscription;
+  /** How the voice agent should answer (owner-edited, pre-filled from use case). */
+  agentScript: string;
+  /** Free-text company/service knowledge the agent may use. Text only. */
+  agentKnowledge: string;
   /** Per-tenant Cal.com key overrides the global one when present. */
   calApiKey: string | null;
   createdAt: string;
@@ -109,12 +124,34 @@ export interface Booking {
   businessId: string;
   serviceId: string;
   serviceName: string;
-  resourceId: string | null;
+  /** Required: every booking is assigned to a resource. */
+  resourceId: string;
   customerName: string | null;
   customerPhone: string | null;
   start: string;
   end: string;
   source: BookingSource;
   calBookingUid: string | null;
+  createdAt: string;
+}
+
+export type CallStatus = "in_progress" | "completed" | "missed" | "failed";
+export type CallProvider = "telnyx" | "zadarma" | "mock";
+
+/** Inbound call on the business DID. Not derived from bookings. */
+export interface Call {
+  id: string;
+  businessId: string;
+  provider: CallProvider;
+  providerCallId: string | null;
+  fromE164: string | null;
+  toE164: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number;
+  billedMinutes: number;
+  overageMinutes: number;
+  status: CallStatus;
+  stripeUsageReported: boolean;
   createdAt: string;
 }

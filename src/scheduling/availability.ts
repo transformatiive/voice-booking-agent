@@ -1,8 +1,9 @@
-import type { Booking, Business, Service } from "../domain/types.js";
+import type { Booking, Business, Resource, Service } from "../domain/types.js";
+import { hoursForResource, pickResourceForService, resourceOffersService } from "../domain/assignment.js";
 
-export type Unavailable = "past" | "closed_day" | "outside_hours" | "conflict";
+export type Unavailable = "past" | "closed_day" | "outside_hours" | "conflict" | "no_resource";
 
-export type AvailabilityResult = { ok: true } | { ok: false; reason: Unavailable };
+export type AvailabilityResult = { ok: true; resource: Resource } | { ok: false; reason: Unavailable };
 
 function minutesSinceMidnight(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
@@ -23,7 +24,15 @@ export function checkAvailability(
     return { ok: false, reason: "past" };
   }
 
-  const day = business.hours[start.getDay()];
+  const resource = resourceId
+    ? business.resources.find((row) => row.id === resourceId)
+    : pickResourceForService(business, service.id);
+  if (!resource || !resourceOffersService(resource, service.id)) {
+    return { ok: false, reason: "no_resource" };
+  }
+
+  const hours = hoursForResource(business, resource);
+  const day = hours[start.getDay()];
   if (!day || day.open === null || day.close === null) {
     return { ok: false, reason: "closed_day" };
   }
@@ -39,7 +48,7 @@ export function checkAvailability(
   const startMs = start.getTime();
   const endMs = end.getTime();
   const conflict = bookings.some((b) => {
-    if (resourceId && b.resourceId && b.resourceId !== resourceId) {
+    if (b.resourceId !== resource.id) {
       return false;
     }
     const bStart = new Date(b.start).getTime();
@@ -50,7 +59,7 @@ export function checkAvailability(
     return { ok: false, reason: "conflict" };
   }
 
-  return { ok: true };
+  return { ok: true, resource };
 }
 
 export function suggestSlots(
@@ -64,19 +73,28 @@ export function suggestSlots(
   if (Number.isNaN(around.getTime())) {
     return [];
   }
-  const day = business.hours[around.getDay()];
-  if (!day || day.open === null || day.close === null) {
-    return [];
-  }
+  const seen = new Set<number>();
   const slots: Date[] = [];
-  const base = new Date(around);
-  base.setHours(0, 0, 0, 0);
-  for (let minute = day.open; minute + service.durationMinutes <= day.close; minute += 30) {
-    const candidate = new Date(base.getTime() + minute * 60_000);
-    if (checkAvailability(business, service, candidate, bookings, now).ok) {
-      slots.push(candidate);
-      if (slots.length >= limit) {
-        break;
+  const candidates = business.resources.filter((resource) => resourceOffersService(resource, service.id));
+  for (const resource of candidates) {
+    const hours = hoursForResource(business, resource);
+    const day = hours[around.getDay()];
+    if (!day || day.open === null || day.close === null) {
+      continue;
+    }
+    const base = new Date(around);
+    base.setHours(0, 0, 0, 0);
+    for (let minute = day.open; minute + service.durationMinutes <= day.close; minute += 30) {
+      const candidate = new Date(base.getTime() + minute * 60_000);
+      if (seen.has(candidate.getTime())) {
+        continue;
+      }
+      if (checkAvailability(business, service, candidate, bookings, now, resource.id).ok) {
+        seen.add(candidate.getTime());
+        slots.push(candidate);
+        if (slots.length >= limit) {
+          return slots;
+        }
       }
     }
   }
