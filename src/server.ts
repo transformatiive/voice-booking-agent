@@ -39,6 +39,8 @@ import {
 import { attachLiveMedia } from "./telephony/liveMedia.js";
 import { consumeSessionQuota } from "./telephony/sessionLimit.js";
 import { MARKETING_DEMO_SLUG, ensureDemoBusinesses } from "./store/seed.js";
+import { CONTENT_HUB_PATH } from "./content/articles.js";
+import { buildSitemapXml, robotsTxt } from "./content/sitemap.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "..", "public");
@@ -479,13 +481,23 @@ app.post("/voice/functions/:slug", async (req, res) => {
 app.get(["/privacidade", "/privacy"], (_req, res) => res.sendFile(join(publicDir, "privacidade.html")));
 app.get(["/termos", "/terms"], (_req, res) => res.sendFile(join(publicDir, "termos.html")));
 app.get(["/dpa", "/data-processing"], (_req, res) => res.sendFile(join(publicDir, "dpa.html")));
+app.get("/sitemap.xml", (_req, res) => {
+  res.type("application/xml").send(buildSitemapXml(config.publicBaseUrl));
+});
+app.get("/robots.txt", (_req, res) => {
+  res.type("text/plain").send(robotsTxt(config.publicBaseUrl));
+});
+
+app.get("/", (_req, res) => {
+  res.sendFile(join(publicDir, "index.html"));
+});
 
 app.use(express.static(publicDir, { index: false }));
 if (existsSync(webDist)) {
-  app.use(express.static(webDist));
+  app.use(express.static(webDist, { index: false }));
 }
 
-app.get(["/", "/app/:slug", "/demo/:slug"], (req, res, next) => {
+app.get(["/app/:slug", "/demo/:slug", CONTENT_HUB_PATH, `${CONTENT_HUB_PATH}/:slug`], (req, res, next) => {
   const spa = join(webDist, "index.html");
   if (existsSync(spa)) {
     res.sendFile(spa);

@@ -207,6 +207,9 @@ siteNav?.querySelectorAll("a").forEach((link) => {
   });
 });
 document.addEventListener("click", (e) => {
+  document.querySelectorAll("details.nav-contents").forEach((el) => {
+    if (!el.contains(e.target)) el.removeAttribute("open");
+  });
   if (!header?.classList.contains("nav-open")) return;
   if (header.contains(e.target)) return;
   setNavOpen(false);

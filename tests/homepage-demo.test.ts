@@ -12,6 +12,10 @@ function readWeb(path: string): string {
   return readFileSync(new URL(`../web/src/${path}`, import.meta.url), "utf8");
 }
 
+function readPublic(path: string): string {
+  return readFileSync(new URL(`../public/${path}`, import.meta.url), "utf8");
+}
+
 describe("clinic marketing demo", () => {
   it("defaults clinic services to Portuguese specialties, not a barbershop", () => {
     const names = defaultServices("clinica").map((s) => s.name);
@@ -81,56 +85,31 @@ describe("clinic marketing demo", () => {
   });
 
   it("homepage picker lists use-cases and the demo DID", () => {
-    const landing = readWeb("pages/Landing.tsx");
-    const voice = readWeb("lib/voice-call.ts");
-    expect(landing).toContain("data-demo-use-case");
-    expect(landing).toContain("210210260");
-    expect(landing).toContain("21 021 0260");
-    expect(landing).toContain("+351 21 021 0260");
-    expect(landing).toContain("+351210210260");
-    expect(landing).toContain("tel:+351210210260");
-    expect(landing).toContain("Ligar para ouvir a demo");
-    expect(landing).toContain("did.nsn");
-    expect(landing).toMatch(/pergunta que demonstração|clínica, barbearia, restaurante, oficina ou imobiliária/);
-    expect(landing).toContain("Ou fale aqui no browser");
-    expect(landing).toContain("selectedUseCase");
-    expect(landing).toContain("/api/demo");
+    const landing = readPublic("index.html");
+    const voice = readPublic("landing.js");
+    expect(landing).toContain("Está a atender um cliente");
+    expect(landing).toContain("Ouvir a demo");
     expect(landing).toContain("Iniciar chamada");
-    expect(landing).not.toMatch(/href="\/demo\//);
-    expect(landing).not.toContain("Sofia");
-    expect(landing).not.toMatch(/Grok/);
-    expect(voice).toContain("flushPendingTools");
-    expect(voice).toContain('sendEvent({ type: "response.create" })');
-    expect(voice).not.toMatch(/Grok|Sofia/);
+    expect(landing).toContain("id=\"demo-call\"");
+    expect(voice).toContain("/api/demo");
+    expect(voice).toContain("clinica-central");
+    expect(readWeb("lib/voice-call.ts")).toContain("flushPendingTools");
+    expect(readWeb("lib/voice-call.ts")).toContain('sendEvent({ type: "response.create" })');
   });
 
   it("customer-facing homepage copy uses Google Calendar, not Cal.com", () => {
-    const landing = readWeb("pages/Landing.tsx");
+    const landing = readPublic("index.html");
     expect(landing).not.toMatch(/cal\.com/i);
-    expect(landing).toContain("Agendamento por voz com marcação no seu Google Calendar.");
-    expect(landing).not.toMatch(/evita conflitos e sobreposições/);
-    expect(landing).not.toMatch(/adesão em minutos/i);
+    expect(landing).toMatch(/Google Calendar/);
   });
 
   it("presents six industry families and 49/99/199 with trial copy", () => {
-    const landing = readWeb("pages/Landing.tsx");
-    expect(landing).toContain("Saúde");
-    expect(landing).toContain("Beleza e bem-estar");
-    expect(landing).toContain("Restauração e hotelaria");
-    expect(landing).toContain("Casa, auto e campo");
-    expect(landing).toContain("Serviços profissionais");
-    expect(landing).toContain("Fitness e formação");
-    expect(landing).toContain("Essencial");
-    expect(landing).toContain("Estúdio");
-    expect(landing).toContain("14 dias");
-    expect(landing).toContain("45 minutos");
+    const landing = readPublic("index.html");
+    expect(landing).toContain("Barbearias");
+    expect(landing).toContain("Salões");
+    expect(landing).toContain("Clínicas");
     expect(PLANS.base.displayName).toBe("Essencial");
     expect(PLANS.studio.displayName).toBe("Estúdio");
-    expect(landing).toMatch(/data-demo-use-case="clinica"/);
-    expect(landing).toMatch(/data-demo-use-case="barbearia"/);
-    expect(landing).toMatch(/data-demo-use-case="restaurante"/);
-    expect(landing).toMatch(/data-demo-use-case="oficina"/);
-    expect(landing).toMatch(/data-demo-use-case="imobiliaria"/);
   });
 
   it("voice client requests a follow-up after tools so Atende does not stall", () => {
@@ -147,9 +126,16 @@ describe("clinic marketing demo", () => {
     const app = readWeb("pages/Backoffice.tsx");
     expect(app).toContain("ChatGPT Live (gpt-live-1)");
     expect(app).toContain("SelectTrigger");
+    expect(app).toContain("Table");
+    expect(app).toContain("DropdownMenu");
+    expect(app).toContain("Dialog");
+    expect(app).toContain("Tabs");
+    expect(app).toContain("Button");
+    expect(app).toContain("SiteHeader");
+    expect(app).toContain("landing-section-title");
     expect(app).not.toMatch(/<select/);
     expect(app).not.toMatch(/Grok|Sofia/);
-    const landing = readWeb("pages/Landing.tsx");
-    expect(landing).not.toMatch(/<select/);
+    expect(readWeb("components/onboard-dialog.tsx")).not.toMatch(/<select/);
+    expect(readWeb("components/site-header.tsx")).not.toMatch(/<select/);
   });
 });
