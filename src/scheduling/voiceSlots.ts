@@ -308,7 +308,7 @@ export function bookingSpeak(startIso: string, serviceName: string, business: Bu
   const start = new Date(startIso);
   const when = Number.isNaN(start.getTime()) ? startIso : speakSlot(start, business.locale, business.timezone);
   if (business.locale === "en") {
-    return `${serviceName} on ${when}. I'll send an SMS confirmation.`;
+    return `${serviceName} on ${when}. It's booked. I'll send an SMS confirmation.`;
   }
-  return `${serviceName} — ${when}. Envio confirmação por SMS.`;
+  return `${serviceName} — ${when}. Está marcada. Envio confirmação por SMS.`;
 }

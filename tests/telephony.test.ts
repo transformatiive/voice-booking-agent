@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MockNumberProvider } from "../src/telephony/mock.js";
 import { TelnyxNumberProvider } from "../src/telephony/telnyx.js";
-import { absolutePublicUrl, buildDemoLiveTeXML, buildIncomingTeXML, demoVerticalOpener, handleDemoInbound, handleDemoPickerFunction, handleVoiceFunction } from "../src/telephony/voice.js";
+import { absolutePublicUrl, buildDemoLiveTeXML, buildIncomingTeXML, handleDemoInbound, handleDemoPickerFunction, handleVoiceFunction } from "../src/telephony/voice.js";
 import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
 import { DEMO_DID_E164, DEMO_PICKER_SLUG, rememberedDemoSlug } from "../src/telephony/demoDid.js";
 import { tempStore } from "./helpers.js";
@@ -267,44 +267,37 @@ describe("voice function webhook", () => {
 });
 
 describe("demo DID picker tools", () => {
-  it("locks a vertical inside the Live session and books that tenant", async () => {
+  it("select_demo_vertical is not a tool — choice is remembered from transcript or a later vertical arg", async () => {
     const store = tempStore();
     ensureDemoBusinesses(store);
     const scheduler = new InMemoryScheduler(store, () => NOW);
-    const selected = (await handleDemoPickerFunction({
+    const selected = await handleDemoPickerFunction({
       store,
       scheduler,
       call: { name: "select_demo_vertical", arguments: { vertical: "4" } },
       fromE164: "+351910000077",
       callSid: "CA_picker",
       now: NOW,
-    })) as { ok: boolean; slug: string; businessName: string; speak?: string; message?: string; instruction?: string };
-    expect(selected.ok).toBe(true);
-    expect(selected.slug).toBe("oficina-norte");
-    expect(selected.businessName).toBe("Oficina Norte");
-    expect(rememberedDemoSlug({ fromE164: "+351910000077", now: NOW.getTime() })).toBe("oficina-norte");
-    expect(selected.speak).toBe(demoVerticalOpener(store.getBusinessBySlug("oficina-norte")!));
-    expect(selected.speak).toBe(
-      "Olá, Oficina Norte — quer Diagnóstico, Revisão ou Pneus? Diga o serviço e o veículo, se o mencionar.",
+    });
+    expect(selected).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: "scenario_choice_is_not_a_tool",
+      }),
     );
-    expect(selected.message).toBe(selected.speak);
-    expect(selected.speak).not.toMatch(/perfeito/i);
-    expect(selected.speak).not.toMatch(/preparar/i);
-    expect(selected.speak).not.toMatch(/Olá! Sou/);
-    expect(String(selected.speak).split(/[.!?]+/).filter((part) => part.trim()).length).toBeLessThanOrEqual(2);
-    expect(String(selected.instruction)).toMatch(/get_slots|book_appointment/);
-    expect(String(selected.instruction)).not.toMatch(/Fuso:|Não te apresentes como uma demo/);
-    expect(JSON.stringify(selected)).not.toMatch(/buildLiveInstructions/);
+    expect(rememberedDemoSlug({ fromE164: "+351910000077", now: NOW.getTime() })).toBeUndefined();
 
     const slots = (await handleDemoPickerFunction({
       store,
       scheduler,
-      call: { name: "get_slots", arguments: { service: "Revisão", date: "2026-08-27" } },
+      call: { name: "get_slots", arguments: { service: "Revisão", date: "2026-08-27", vertical: "4" } },
       fromE164: "+351910000077",
       callSid: "CA_picker",
       now: NOW,
-    })) as { slots: string[] };
+    })) as { slots: string[]; message?: string };
     expect(slots.slots.length).toBeGreaterThan(0);
+    expect(slots.message).toBeTruthy();
+    expect(rememberedDemoSlug({ fromE164: "+351910000077", now: NOW.getTime() })).toBe("oficina-norte");
 
     const booked = (await handleDemoPickerFunction({
       store,
@@ -315,38 +308,30 @@ describe("demo DID picker tools", () => {
       },
       fromE164: "+351910000077",
       now: NOW,
-    })) as { ok: boolean };
+    })) as { ok: boolean; speak?: string; message?: string };
     expect(booked.ok).toBe(true);
+    expect(booked.speak).toMatch(/Revisão/);
+    expect(booked.speak).toMatch(/Está marcada/);
+    expect(booked.message).toBe(booked.speak);
     expect(store.getBusinessBySlug("oficina-norte")).toBeDefined();
     expect(store.listBookings(store.getBusinessBySlug("oficina-norte")!.id)).toHaveLength(1);
     expect(store.listBookings(store.getBusinessBySlug("clinica-central")!.id)).toHaveLength(0);
   });
 
-  it("clínica opener names the seeded specialties, not a transition stall", async () => {
+  it("books clínica from a later vertical argument, not a choice tool", async () => {
     const store = tempStore();
     ensureDemoBusinesses(store);
     const scheduler = new InMemoryScheduler(store, () => NOW);
-    const selected = (await handleDemoPickerFunction({
+    const slots = (await handleDemoPickerFunction({
       store,
       scheduler,
-      call: { name: "select_demo_vertical", arguments: { vertical: "clinica" } },
+      call: { name: "get_slots", arguments: { service: "Dermatologia", date: "2026-08-27", vertical: "clinica" } },
       fromE164: "+351910000078",
       now: NOW,
-    })) as { ok: boolean; slug: string; speak?: string; message?: string; instruction?: string };
-    expect(selected.ok).toBe(true);
-    expect(selected.slug).toBe("clinica-central");
-    expect(selected.speak).toBe(demoVerticalOpener(store.getBusinessBySlug("clinica-central")!));
-    expect(selected.speak).toMatch(/Clínica Central/);
-    expect(selected.speak).toMatch(/clínica geral/i);
-    expect(selected.speak).toMatch(/dermatologia/i);
-    expect(selected.speak).toMatch(/pediatria/i);
-    expect(selected.speak).toMatch(/medicina dentária/i);
-    expect(selected.message).toBe(selected.speak);
-    expect(selected.speak).not.toMatch(/perfeito/i);
-    expect(selected.speak).not.toMatch(/preparar/i);
-    expect(selected.speak).not.toMatch(/Olá! Sou/);
-    expect(String(selected.speak).split(/[.!?]+/).filter((part) => part.trim()).length).toBeLessThanOrEqual(2);
-    expect(String(selected.instruction)).toMatch(/get_slots|book_appointment/);
+    })) as { slots: string[]; message?: string };
+    expect(slots.slots.length).toBeGreaterThan(0);
+    expect(slots.message).toMatch(/Tenho:/);
+    expect(rememberedDemoSlug({ fromE164: "+351910000078", now: NOW.getTime() })).toBe("clinica-central");
   });
 
   it("refuses to book before a vertical is chosen", async () => {
@@ -363,30 +348,26 @@ describe("demo DID picker tools", () => {
     expect(result.error).toBe("select_vertical_first");
   });
 
-  it("barbearia, restaurante and imobiliária openers are the backend first sentence", async () => {
+  it("barbearia, restaurante and imobiliária book from the vertical argument", async () => {
     const store = tempStore();
     ensureDemoBusinesses(store);
     const scheduler = new InMemoryScheduler(store, () => NOW);
-    const cases: Array<{ vertical: string; slug: string }> = [
-      { vertical: "barbearia", slug: "barbearia-lisboa" },
-      { vertical: "restaurante", slug: "restaurante-baixa" },
-      { vertical: "imobiliaria", slug: "imobiliaria-baixa" },
+    const cases: Array<{ vertical: string; slug: string; service: string }> = [
+      { vertical: "barbearia", slug: "barbearia-lisboa", service: "Corte de cabelo" },
+      { vertical: "restaurante", slug: "restaurante-baixa", service: "Reserva de mesa (2 pessoas)" },
+      { vertical: "imobiliaria", slug: "imobiliaria-baixa", service: "Visita ao imóvel" },
     ];
-    for (const [index, { vertical, slug }] of cases.entries()) {
-      const selected = (await handleDemoPickerFunction({
+    for (const [index, { vertical, slug, service }] of cases.entries()) {
+      const slots = (await handleDemoPickerFunction({
         store,
         scheduler,
-        call: { name: "select_demo_vertical", arguments: { vertical } },
+        call: { name: "get_slots", arguments: { service, date: "2026-08-27", vertical } },
         fromE164: `+35191000008${index}`,
         now: NOW,
-      })) as { ok: boolean; slug: string; speak?: string; message?: string };
-      const business = store.getBusinessBySlug(slug)!;
-      expect(selected.ok).toBe(true);
-      expect(selected.slug).toBe(slug);
-      expect(selected.speak).toBe(demoVerticalOpener(business));
-      expect(selected.message).toBe(selected.speak);
-      expect(selected.speak).toContain(business.name);
-      expect(selected.speak).not.toMatch(/perfeito|preparar|celular|vocês|a gente/i);
+      })) as { slots: string[]; message?: string };
+      expect(slots.slots.length).toBeGreaterThan(0);
+      expect(slots.message).toBeTruthy();
+      expect(rememberedDemoSlug({ fromE164: `+35191000008${index}`, now: NOW.getTime() })).toBe(slug);
     }
   });
 });

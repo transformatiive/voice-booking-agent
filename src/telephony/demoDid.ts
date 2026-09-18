@@ -100,6 +100,91 @@ export function useCaseFromSpeech(speech: string): DemoPickerUseCase | undefined
   return undefined;
 }
 
+const PT_CHOICE_WORDS: Record<string, string> = {
+  um: "1",
+  uma: "1",
+  dois: "2",
+  duas: "2",
+  tres: "3",
+  quatro: "4",
+  cinco: "5",
+};
+
+function useCaseFromMenuNumber(speech: string): DemoPickerUseCase | undefined {
+  const text = speech
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  const isolated = demoUseCaseFromChoice(text);
+  if (isolated) {
+    return isolated;
+  }
+  const option = text.match(/\bopcao\s*(1|2|3|4|5|um|uma|dois|duas|tres|quatro|cinco)\b/);
+  if (option?.[1]) {
+    const digit = PT_CHOICE_WORDS[option[1]] ?? option[1];
+    return ivrUseCaseForDigit(digit);
+  }
+  const numbered = text.match(/\b(quatro|cinco)\b/);
+  if (numbered?.[1]) {
+    return ivrUseCaseForDigit(PT_CHOICE_WORDS[numbered[1]]);
+  }
+  return undefined;
+}
+
+function useCaseFromBusinessName(speech: string): DemoPickerUseCase | undefined {
+  const text = speech
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  for (const option of OPTIONS) {
+    const slugName = option.slug.replace(/-/g, " ");
+    if (text.includes(slugName)) {
+      return option.useCase;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Bind the demo tenant from live transcript — not a tool.
+ * Caller speech: name, 1–5, or «opção N». Output: full business name only
+ * (so the Atende menu listing all five labels does not lock a tenant).
+ * First match wins for this call.
+ */
+export function rememberDemoVerticalFromTranscript(opts: {
+  text: string;
+  fromE164?: string;
+  callSid?: string;
+  now?: number;
+  source?: "input" | "output";
+}): string | undefined {
+  const now = opts.now ?? Date.now();
+  const existing = rememberedDemoSlug({
+    fromE164: opts.fromE164,
+    callSid: opts.callSid,
+    now,
+  });
+  if (existing) {
+    return existing;
+  }
+  const useCase =
+    opts.source === "output"
+      ? useCaseFromBusinessName(opts.text)
+      : (useCaseFromMenuNumber(opts.text) ?? useCaseFromSpeech(opts.text));
+  if (!useCase) {
+    return undefined;
+  }
+  const slug = demoSlugForUseCase(useCase);
+  rememberDemoChoice({
+    slug,
+    fromE164: opts.fromE164,
+    callSid: opts.callSid,
+    now,
+  });
+  return slug;
+}
+
 export function bindDemoCaller(opts: {
   callerE164: string;
   useCase: UseCase;

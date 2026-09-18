@@ -279,11 +279,13 @@ export async function handleVoiceFunction(
               : "Essa hora não ficou. Propõe a alternativa em voz alta e continua a falar.",
         };
       }
+      const speak = bookingSpeak(result.booking.start, result.booking.serviceName, business);
       return {
         ok: true,
         bookingId: result.booking.id,
         start: result.booking.start,
-        speak: bookingSpeak(result.booking.start, result.booking.serviceName, business),
+        speak,
+        message: speak,
         smsConfirmation: true,
         needName: !customerName,
         needPhone: !customerPhone,
@@ -427,8 +429,9 @@ function omitPickerKeys(args: Record<string, unknown>): Record<string, unknown> 
 
 /**
  * Demo DID picker: one Live session whose instructions already hold every
- * vertical's receptionist script. select_demo_vertical records the choice so
- * later get_slots / book_appointment hit that tenant.
+ * vertical's receptionist script. The caller's choice is remembered from the
+ * transcript or a later booking-tool `vertical` argument — not from a tool at
+ * the moment they confirm.
  */
 export async function handleDemoPickerFunction(opts: {
   store: Store;
@@ -442,27 +445,11 @@ export async function handleDemoPickerFunction(opts: {
   const now = nowDate.getTime();
 
   if (opts.call.name === SELECT_DEMO_VERTICAL) {
-    const useCase = verticalFromToolArgs(opts.call.arguments);
-    if (!useCase) {
-      return {
-        ok: false,
-        error: "unknown_vertical",
-        instruction:
-          "Pergunta qual demonstração quer: clínica, barbearia, restaurante, oficina ou imobiliária (1 a 5).",
-      };
-    }
-    const slug = demoSlugForUseCase(useCase);
-    const business = opts.store.getBusinessBySlug(slug);
-    if (!business) {
-      return { ok: false, error: "business_not_found", slug };
-    }
-    rememberDemoChoice({
-      slug,
-      fromE164: opts.fromE164,
-      callSid: opts.callSid,
-      now,
-    });
-    return demoVerticalReadyResult(business);
+    return {
+      ok: false,
+      error: "scenario_choice_is_not_a_tool",
+      instruction: "Não chames ferramentas para escolher o cenário. Cumprimenta já como essa recepção.",
+    };
   }
 
   const remembered = rememberedDemoSlug({
@@ -475,7 +462,7 @@ export async function handleDemoPickerFunction(opts: {
     return {
       error: "select_vertical_first",
       instruction:
-        "Ainda não há vertical. Pergunta qual demonstração quer ouvir e chama select_demo_vertical.",
+        "Ainda não há vertical. O cliente escolhe pelo nome ou 1-5; passa vertical no get_slots.",
     };
   }
   const slug = demoSlugForUseCase(chosen);
