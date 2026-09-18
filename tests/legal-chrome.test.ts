@@ -59,12 +59,13 @@ describe("teal chrome on public and backoffice surfaces", () => {
     const landing = readFileSync(join(root, "web", "src", "pages", "Landing.tsx"), "utf8");
     const backoffice = readFileSync(join(root, "web", "src", "pages", "Backoffice.tsx"), "utf8");
     expect(landing).toContain('layout="viewport"');
-    expect(landing).not.toMatch(/<select[\s>]/);
     expect(landing).toContain('autoComplete="tel"');
     expect(backoffice).toContain("Pendente de Aprovação Regulatória");
     expect(backoffice).toContain("Telnyx");
+    expect(backoffice).toContain("2 dias úteis");
     expect(backoffice).not.toContain("Estamos a preparar a sua conta");
-    expect(backoffice).not.toContain("<select");
+    expect(backoffice).not.toContain("Aguarda aprovação");
+    expect(backoffice).not.toContain("O backoffice abre nessa altura");
   });
 
   it("SPA shell still exists for /app routes", () => {

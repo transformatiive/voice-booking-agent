@@ -69,6 +69,16 @@ export const config = {
   },
 
   demoDidE164: env("DEMO_DID_E164") ?? "+351210210260",
+
+  mail: {
+    get resendApiKey() {
+      return env("RESEND_API_KEY");
+    },
+    /** Verified domain in production. Sandbox onboarding@resend.dev only delivers to the Resend account email. */
+    get from() {
+      return env("MAIL_FROM") ?? "Atende <onboarding@resend.dev>";
+    },
+  },
 } as const;
 
 export function featureFlags() {

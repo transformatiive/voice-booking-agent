@@ -10,7 +10,6 @@ const SURFACE = "#f6f8fa";
 const LINE = "#e4eaf0";
 const HAIRLINE = "#eef2f6";
 const ACCENT = "oklch(0.50 0.13 168)";
-const ACCENT_BRIGHT = "oklch(0.58 0.14 168)";
 const ACCENT_DARK = "oklch(0.42 0.11 168)";
 const ACCENT_SOFT = "oklch(0.95 0.035 168)";
 const PANEL = "linear-gradient(175deg,#132330 0%,#0c151e 75%)";
@@ -96,6 +95,46 @@ function labelUseCase(u: string) {
     oficina: "Oficina", imobiliaria: "Imobiliária", ginasio: "Ginásio", outro: "Outro",
   };
   return map[u] || u;
+}
+
+type LineKind = "assigned" | "porting" | "pending";
+
+function lineKind(business: Business): LineKind {
+  const number = business.number;
+  if (number && number.status === "active") return "assigned";
+  if (business.numberPreference === "port" || number?.status === "porting") return "porting";
+  return "pending";
+}
+
+function lineStatusCopy(business: Business): { kind: LineKind; label: string; title: string; body: string } {
+  const kind = lineKind(business);
+  switch (kind) {
+    case "assigned":
+      return {
+        kind,
+        label: "Número atribuído",
+        title: "Linha ativa",
+        body: `O número ${business.number?.e164} já está atribuído. A Transformatiive provisiona linhas via Telnyx.`,
+      };
+    case "porting":
+      return {
+        kind,
+        label: "Pendente de Aprovação Regulatória",
+        title: "Pendente de Aprovação Regulatória",
+        body: "Pediu para portar o número que os clientes já conhecem. A Transformatiive trata do processo via Telnyx — a aprovação regulatória, se existir, corre do nosso lado e pode nem ser necessária. Costuma levar cerca de 2 dias úteis. O backoffice já está disponível.",
+      };
+    case "pending":
+      return {
+        kind,
+        label: "Pendente de Aprovação Regulatória",
+        title: "Pendente de Aprovação Regulatória",
+        body: "O número ainda não está publicado. A Transformatiive atribui o +351 via Telnyx; a aprovação regulatória, se existir, corre do nosso lado e muitas vezes nem é necessária. A linha fica normalmente ativa em cerca de 2 dias úteis. Já pode usar Agenda, Chamadas, Recursos, Serviços, Horários, Assistente e Faturação.",
+      };
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
 }
 
 /* ------------------------------------------------------------------- icons */
@@ -215,9 +254,8 @@ export function Backoffice() {
   }
 
   const b = state.business;
-  if (b.status !== "active") {
-    return <Pending business={b} demoActivate={Boolean(state.features.demoActivate)} onActivated={load} />;
-  }
+  const status = lineStatusCopy(b);
+  const lineLive = status.kind === "assigned";
 
   const usedPct = b.subscription.includedMinutes
     ? Math.min(100, Math.round((b.subscription.usedMinutes / b.subscription.includedMinutes) * 100))
@@ -244,9 +282,9 @@ export function Backoffice() {
           <div style={{ fontFamily: MONO, fontSize: 12, marginTop: 5, color: "#93a7b6" }}>
             {b.number?.e164 ?? "sem número"}
           </div>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 10, fontSize: 12, fontWeight: 600, color: "oklch(0.84 0.13 168)" }}>
-            <span style={{ display: "block", width: 7, height: 7, borderRadius: 99, background: "oklch(0.78 0.15 168)", boxShadow: "0 0 0 4px oklch(0.78 0.15 168 / 0.22)" }} />
-            a atender
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 10, fontSize: 12, fontWeight: 600, color: lineLive ? "oklch(0.84 0.13 168)" : "#f3d9a4" }}>
+            <span style={{ display: "block", width: 7, height: 7, borderRadius: 99, background: lineLive ? "oklch(0.78 0.15 168)" : "#e2b657", boxShadow: lineLive ? "0 0 0 4px oklch(0.78 0.15 168 / 0.22)" : "0 0 0 4px #e2b65733" }} />
+            {lineLive ? "a atender" : status.label}
           </div>
         </div>
 
@@ -291,6 +329,19 @@ export function Backoffice() {
       </aside>
 
       <main className="bo" style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", gap: 18, padding: "26px 28px" }}>
+        {status.kind !== "assigned" ? (
+          <div style={{ padding: "16px 20px", borderRadius: 18, background: ACCENT_SOFT, border: `1px solid ${LINE}` }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 12px 5px 10px", borderRadius: 999, background: "#fff", color: ACCENT_DARK, fontSize: 12, fontWeight: 700 }}>
+              <span style={{ display: "block", width: 7, height: 7, borderRadius: 99, background: "#e2b657" }} />
+              {status.label}
+            </div>
+            <h2 style={{ margin: "12px 0 0", fontFamily: DISPLAY, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: INK }}>
+              {status.title}
+            </h2>
+            <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.6, color: BODY }}>{status.body}</p>
+          </div>
+        ) : null}
+
         {flash ? (
           <div style={{ padding: "12px 18px", borderRadius: 14, background: ACCENT_SOFT, color: ACCENT_DARK, fontSize: 14, fontWeight: 600 }}>
             {flash}
@@ -852,66 +903,6 @@ function Faturacao({ business, usedPct }: { business: Business; usedPct: number 
           <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 22, letterSpacing: "-0.03em", marginTop: 10 }}>
             {labelUseCase(business.useCase)}
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ----------------------------------------------------------------- pending */
-
-function Pending({ business, demoActivate, onActivated }: { business: Business; demoActivate: boolean; onActivated: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <div style={{ display: "grid", placeItems: "center", minHeight: "100svh", padding: 28, fontFamily: SANS, background: SURFACE }}>
-      <div style={{ maxWidth: 560, width: "100%", padding: 34, borderRadius: 24, background: "#fff", border: `1px solid ${LINE}` }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "7px 14px 7px 11px", borderRadius: 999, background: ACCENT_SOFT, color: ACCENT_DARK, fontSize: 13, fontWeight: 600 }}>
-          <span style={{ display: "block", width: 7, height: 7, borderRadius: 99, background: ACCENT_BRIGHT }} />
-          Aguarda aprovação
-        </span>
-        <h1 style={{ margin: "20px 0 0", fontFamily: DISPLAY, fontWeight: 700, fontSize: 32, letterSpacing: "-0.035em", color: INK }}>
-          Estamos a preparar a sua conta
-        </h1>
-        <p style={{ margin: "16px 0 0", fontSize: 16, lineHeight: 1.65, color: BODY }}>
-          Recebemos os seus dados. Tratamos do número +351 por si — a atribuição fica pendente da aprovação
-          regulatória e não fica ativa no segundo a seguir ao pedido.
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 24 }}>
-          {[
-            `Dados recebidos · ${business.name} · plano ${business.plan.displayName || business.plan.name}`,
-            business.numberPreference === "port" ? "Portabilidade do seu número atual" : "Atribuição de um número +351",
-            "Configuração de voz (SIP) · ligamos o número ao assistente",
-          ].map((line, i) => (
-            <div key={line} style={{ display: "flex", gap: 12, padding: "14px 16px", borderRadius: 14, background: SURFACE }}>
-              <span style={{ flex: "none", display: "inline-grid", placeItems: "center", width: 26, height: 26, borderRadius: 99, background: ACCENT_SOFT, color: ACCENT_DARK, fontFamily: DISPLAY, fontWeight: 700, fontSize: 13 }}>
-                {i + 1}
-              </span>
-              <span style={{ fontSize: 15, lineHeight: 1.5, color: BODY }}>{line}</span>
-            </div>
-          ))}
-        </div>
-        <p style={{ margin: "20px 0 0", fontSize: 14, color: MUTED }}>
-          {business.name} · {labelUseCase(business.useCase)} · assistente {business.agentName}
-          {business.contactEmail ? ` · ${business.contactEmail}` : ""}
-        </p>
-        <div style={{ marginTop: 22 }}>
-          {demoActivate ? (
-            <PrimaryButton
-              onClick={() => {
-                if (busy) return;
-                setBusy(true);
-                void fetch(`/api/business/${business.slug}/activate`, { method: "POST" })
-                  .then(onActivated)
-                  .finally(() => setBusy(false));
-              }}
-            >
-              Ver o backoffice (demonstração)
-            </PrimaryButton>
-          ) : (
-            <p style={{ margin: 0, fontSize: 14, color: MUTED }}>
-              Avisamos por email quando o número for aprovado. O backoffice abre nessa altura.
-            </p>
-          )}
         </div>
       </div>
     </div>

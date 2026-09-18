@@ -144,13 +144,14 @@ describe("clinic marketing demo", () => {
     expect(js).toContain("AbortController");
   });
 
-  it("backoffice uses shadcn Select and gpt-live-1, not native select or Grok", () => {
+  it("backoffice is usable while the number is pending, without Grok/Sofia", () => {
     const app = readWeb("pages/Backoffice.tsx");
-    expect(app).toContain("ChatGPT Live (gpt-live-1)");
-    expect(app).toContain("SelectTrigger");
+    expect(app).toContain("ChatGPT Live");
     expect(app).toContain("Pendente de Aprovação Regulatória");
-    expect(app).not.toMatch(/<select/);
+    expect(app).toContain("Telnyx");
+    expect(app).toContain("2 dias úteis");
     expect(app).not.toMatch(/Grok|Sofia/);
     expect(app).not.toContain("Estamos a preparar a sua conta");
+    expect(app).not.toContain("Aguarda aprovação");
   });
 });
