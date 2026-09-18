@@ -15,6 +15,10 @@ function readWeb(path: string): string {
   return readFileSync(new URL(`../web/src/${path}`, import.meta.url), "utf8");
 }
 
+function readPublic(path: string): string {
+  return readFileSync(new URL(`../public/${path}`, import.meta.url), "utf8");
+}
+
 const SLOP = [
   /no mundo (atual|de hoje)/i,
   /é (essencial|fundamental|crucial)/i,
@@ -83,26 +87,21 @@ describe("conteúdos SEO pt-PT", () => {
   });
 
   it("adds a Conteúdos menu instead of dumping article cards on the homepage", () => {
-    const header = readWeb("components/site-header.tsx");
-    const menu = readWeb("components/content-menu.tsx");
-    const landing = readWeb("pages/Landing.tsx");
+    const home = readPublic("index.html");
     const hub = readWeb("pages/Contents.tsx");
     const page = readWeb("pages/Article.tsx");
-    expect(header).toContain("ContentMenu");
-    expect(header).toContain("landing-header");
-    expect(header).toContain("Conteúdos");
-    expect(readWeb("pages/Backoffice.tsx")).toContain("SiteHeader");
-    expect(menu).toContain("NavigationMenu");
-    expect(menu).toContain("data-content-menu");
-    expect(menu).not.toMatch(/<select/);
-    expect(landing).toContain("SiteHeader");
-    expect(landing).toContain("landing-hero");
-    expect(landing).not.toMatch(/ARTICLES\.map/);
-    expect(landing).not.toContain("/conteudos/");
+    expect(home).toContain("Está a atender um cliente");
+    expect(home).toContain("data-content-menu");
+    expect(home).toContain("Conteúdos");
+    expect(home).toContain(CONTENT_HUB_PATH);
+    for (const article of ARTICLES) {
+      expect(home).toContain(articlePath(article.slug));
+    }
+    expect(home).not.toMatch(/ARTICLES\.map/);
+    expect(readWeb("pages/Landing.tsx")).not.toContain("/conteudos/");
     expect(hub).toContain("{article.title}");
     expect(page).toContain("{article.title}");
     expect(page).toContain("<h1");
-    expect(readWeb("components/onboard-dialog.tsx")).not.toMatch(/<select/);
   });
 
   it("lists every guide on the sitemap and robots file", () => {
@@ -121,6 +120,8 @@ describe("conteúdos SEO pt-PT", () => {
     expect(server).toContain("CONTENT_HUB_PATH");
     expect(server).toContain("/sitemap.xml");
     expect(server).toContain("/robots.txt");
+    expect(server).toContain('app.get("/",');
+    expect(server).toContain("publicDir, \"index.html\"");
     expect(readWeb("main.tsx")).toContain("/conteudos");
     expect(readWeb("main.tsx")).toContain("/conteudos/:slug");
   });

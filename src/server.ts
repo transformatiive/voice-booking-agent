@@ -488,12 +488,16 @@ app.get("/robots.txt", (_req, res) => {
   res.type("text/plain").send(robotsTxt(config.publicBaseUrl));
 });
 
+app.get("/", (_req, res) => {
+  res.sendFile(join(publicDir, "index.html"));
+});
+
 app.use(express.static(publicDir, { index: false }));
 if (existsSync(webDist)) {
-  app.use(express.static(webDist));
+  app.use(express.static(webDist, { index: false }));
 }
 
-app.get(["/", "/app/:slug", "/demo/:slug", CONTENT_HUB_PATH, `${CONTENT_HUB_PATH}/:slug`], (req, res, next) => {
+app.get(["/app/:slug", "/demo/:slug", CONTENT_HUB_PATH, `${CONTENT_HUB_PATH}/:slug`], (req, res, next) => {
   const spa = join(webDist, "index.html");
   if (existsSync(spa)) {
     res.sendFile(spa);
