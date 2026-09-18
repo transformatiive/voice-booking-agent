@@ -480,14 +480,8 @@ app.get(["/privacidade", "/privacy"], (_req, res) => res.sendFile(join(publicDir
 app.get(["/termos", "/terms"], (_req, res) => res.sendFile(join(publicDir, "termos.html")));
 app.get(["/dpa", "/data-processing"], (_req, res) => res.sendFile(join(publicDir, "dpa.html")));
 
-app.use(express.static(publicDir, { index: false }));
-
-app.get("/", (_req, res, next) => {
-  const landing = join(publicDir, "index.html");
-  if (existsSync(landing)) {
-    res.sendFile(landing);
-    return;
-  }
+// Prefer the Vite SPA at / so public/index.html cannot hide Nuno's landing.
+app.get(["/", "/index.html"], (_req, res, next) => {
   const spa = join(webDist, "index.html");
   if (existsSync(spa)) {
     res.sendFile(spa);
@@ -495,6 +489,8 @@ app.get("/", (_req, res, next) => {
   }
   next();
 });
+
+app.use(express.static(publicDir, { index: false }));
 
 if (existsSync(webDist)) {
   app.use(express.static(webDist, { index: false }));
