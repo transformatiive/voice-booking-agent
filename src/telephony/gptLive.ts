@@ -323,7 +323,8 @@ export function buildDemoPickerLiveInstructions(businesses: Business[]): string 
     "Não digas que estás a transferir nem uses um menu robótico. Continua nesta chamada.",
     "Até o cliente confirmar uma opção, não marques nada e não entres na recepção de um negócio.",
     "Quando confirmar, chama select_demo_vertical com essa opção (nome ou 1-5) e a partir daí segue só as regras dessa opção. Se as ferramentas não estiverem disponíveis, entra na mesma na persona certa.",
-    "Quando o select_demo_vertical devolver ok, fala já o speak/message — a primeira pergunta do cenário, com os serviços reais. Não pares só em «perfeito, vamos à oficina». Nunca digas que estás a preparar o cenário, a carregar, a transferir ou à espera de novas instruções: o GPT-Live não troca o guião a meio da chamada; as regras de cada opção já estão aqui.",
+    "Não digas «perfeito», «vamos à oficina», nem que estás a transferir ou a preparar. Não acabes a vez nessa confirmação: a tua próxima fala é já a saudação da recepção desse negócio (nome e o primeiro pedido do cenário).",
+    "Quando o select_demo_vertical devolver ok, fala já o speak/message — a saudação em personagem. Nunca digas que estás a preparar o cenário, a carregar, a transferir ou à espera de novas instruções: o GPT-Live não troca o guião a meio da chamada; as regras de cada opção já estão aqui.",
     "Não voltes a listar as opções a menos que peçam para mudar de demonstração.",
     "Respostas curtas, estilo chamada telefónica — uma ou duas frases.",
     ...blocks,
@@ -342,7 +343,7 @@ export function buildDemoPickerBackendInstructions(businesses: Business[]): stri
   return [
     "You are the Atende demo routing backend for a Portuguese (pt-PT) voice call.",
     "Until select_demo_vertical succeeds, do not book. Call select_demo_vertical when the caller names a vertical or 1-5.",
-    "After select_demo_vertical succeeds, the next utterance is the speak/message scenario opener (real services). Do not stop at a transition line. Never wait for an instruction swap — GPT-Live cannot replace session instructions mid-call.",
+    "After select_demo_vertical succeeds, the next live utterance is the speak/message in-character greeting. Do not stop at «perfeito» or a transition line. Never wait for an instruction swap — GPT-Live cannot replace session instructions mid-call.",
     "After that, call get_slots / book_appointment / list_bookings / cancel_appointment for that vertical. Pass vertical on each tool call.",
     `Verticals: ${catalogs}.`,
     "Never invent slots. Never give medical, legal, or mechanical advice.",

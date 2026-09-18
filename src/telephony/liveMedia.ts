@@ -298,21 +298,16 @@ class LiveMediaBridge {
     }
     this.sendOpenAi({
       type: "response.item.create",
+      event_id: `tool-out-${callId}`,
       item: {
         type: "function_call_output",
         call_id: callId,
         output: JSON.stringify(output),
       },
     });
-    this.sendOpenAi({ type: "response.create" });
-    const spoken = spokenCueAfterTool(name, output);
-    if (spoken) {
-      this.sendOpenAi({
-        type: "session.commentary.append",
-        event_id: `tool-speak-${callId}`,
-        delegation_id: null,
-        content: spoken,
-      });
+    this.sendOpenAi({ type: "response.create", event_id: `tool-continue-${callId}` });
+    for (const event of liveSpeakFollowUpEvents(name, output, callId)) {
+      this.sendOpenAi(event);
     }
   }
 
@@ -359,9 +354,48 @@ function stringField(rec: Record<string, unknown>, key: string): string | undefi
 
 /**
  * GPT-Live `response.create` continues the Responses backend; it does not make the
- * voice speak. After the demo picker locks a vertical, append commentary so the
- * caller hears the scenario opener instead of «a preparar o cenário».
+ * voice speak. Docs: request a greeting with `session.instructions.append`
+ * (speak immediately, without waiting for the caller), then a short
+ * `session.commentary.append` to begin. Commentary alone is paraphrasable
+ * context and does not start audio after a finished «perfeito» turn.
  */
+export type LiveSpeakFollowUpEvent = {
+  type: "session.instructions.append" | "session.commentary.append";
+  event_id: string;
+  delegation_id: null;
+  content: string;
+};
+
+export function liveSpeakFollowUpEvents(
+  name: string,
+  output: Record<string, unknown>,
+  callId: string,
+): LiveSpeakFollowUpEvent[] {
+  const speak = spokenCueAfterTool(name, output);
+  if (!speak) {
+    return [];
+  }
+  const businessName = stringField(output, "businessName") ?? "negócio";
+  return [
+    {
+      type: "session.instructions.append",
+      event_id: `tool-greet-${callId}`,
+      delegation_id: null,
+      content: [
+        `És agora a recepção da ${businessName}. Fala português de Portugal.`,
+        `Cumprimenta já, sem esperar que o cliente fale, com esta saudação: «${speak}».`,
+        "Não digas «perfeito», nem que estás a preparar, a carregar ou a transferir. Depois pausa e ouve.",
+      ].join(" "),
+    },
+    {
+      type: "session.commentary.append",
+      event_id: `tool-begin-${callId}`,
+      delegation_id: null,
+      content: "Diz agora a saudação. Começa a conversa, seguindo as instruções.",
+    },
+  ];
+}
+
 export function spokenCueAfterTool(name: string, output: Record<string, unknown>): string | undefined {
   if (name !== "select_demo_vertical") {
     return undefined;
