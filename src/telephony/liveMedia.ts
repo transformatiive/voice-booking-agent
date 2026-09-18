@@ -415,18 +415,3 @@ export function completedFunctionCallFromDelegatedEvent(
   }
   return { name, callId, arguments: parseToolArguments(rec.arguments) };
 }
-
-export function spokenCueAfterTool(name: string, output: Record<string, unknown>): string | undefined {
-  if (name !== "select_demo_vertical") {
-    return undefined;
-  }
-  const speak = stringField(output, "speak") ?? stringField(output, "message");
-  if (speak) {
-    return speak;
-  }
-  const instruction = stringField(output, "instruction");
-  if (instruction) {
-    return instruction;
-  }
-  return "A opção está confirmada. Fala já como a recepção desse negócio. Não digas que estás a preparar o cenário.";
-}

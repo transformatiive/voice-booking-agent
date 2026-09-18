@@ -426,9 +426,9 @@ function omitPickerKeys(args: Record<string, unknown>): Record<string, unknown> 
 }
 
 /**
- * DID picker session tools: lock a vertical, then dispatch booking tools to that tenant.
- * GPT-Live cannot replace session instructions mid-call, so the picker prompt holds every
- * vertical and this tool records the caller's choice for subsequent get_slots/book calls.
+ * Demo DID picker: one Live session whose instructions already hold every
+ * vertical's receptionist script. select_demo_vertical records the choice so
+ * later get_slots / book_appointment hit that tenant.
  */
 export async function handleDemoPickerFunction(opts: {
   store: Store;

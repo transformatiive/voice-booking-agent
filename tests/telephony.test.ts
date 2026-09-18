@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MockNumberProvider } from "../src/telephony/mock.js";
 import { TelnyxNumberProvider } from "../src/telephony/telnyx.js";
-import { absolutePublicUrl, buildDemoLiveTeXML, buildIncomingTeXML, handleDemoInbound, handleDemoPickerFunction, handleVoiceFunction } from "../src/telephony/voice.js";
+import { absolutePublicUrl, buildDemoLiveTeXML, buildIncomingTeXML, demoVerticalOpener, handleDemoInbound, handleDemoPickerFunction, handleVoiceFunction } from "../src/telephony/voice.js";
 import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
 import { DEMO_DID_E164, DEMO_PICKER_SLUG, rememberedDemoSlug } from "../src/telephony/demoDid.js";
 import { tempStore } from "./helpers.js";
@@ -283,11 +283,10 @@ describe("demo DID picker tools", () => {
     expect(selected.slug).toBe("oficina-norte");
     expect(selected.businessName).toBe("Oficina Norte");
     expect(rememberedDemoSlug({ fromE164: "+351910000077", now: NOW.getTime() })).toBe("oficina-norte");
-    expect(selected.speak).toMatch(/Oficina Norte/);
-    expect(selected.speak).toMatch(/diagnóstico/i);
-    expect(selected.speak).toMatch(/revisão/i);
-    expect(selected.speak).toMatch(/pneus/i);
-    expect(selected.speak).toMatch(/veículo|carro/i);
+    expect(selected.speak).toBe(demoVerticalOpener(store.getBusinessBySlug("oficina-norte")!));
+    expect(selected.speak).toBe(
+      "Olá, Oficina Norte — quer Diagnóstico, Revisão ou Pneus? Diga o serviço e o veículo, se o mencionar.",
+    );
     expect(selected.message).toBe(selected.speak);
     expect(selected.speak).not.toMatch(/perfeito/i);
     expect(selected.speak).not.toMatch(/preparar/i);
@@ -336,6 +335,7 @@ describe("demo DID picker tools", () => {
     })) as { ok: boolean; slug: string; speak?: string; message?: string; instruction?: string };
     expect(selected.ok).toBe(true);
     expect(selected.slug).toBe("clinica-central");
+    expect(selected.speak).toBe(demoVerticalOpener(store.getBusinessBySlug("clinica-central")!));
     expect(selected.speak).toMatch(/Clínica Central/);
     expect(selected.speak).toMatch(/clínica geral/i);
     expect(selected.speak).toMatch(/dermatologia/i);
@@ -361,5 +361,32 @@ describe("demo DID picker tools", () => {
       now: NOW,
     });
     expect(result.error).toBe("select_vertical_first");
+  });
+
+  it("barbearia, restaurante and imobiliária openers are the backend first sentence", async () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const scheduler = new InMemoryScheduler(store, () => NOW);
+    const cases: Array<{ vertical: string; slug: string }> = [
+      { vertical: "barbearia", slug: "barbearia-lisboa" },
+      { vertical: "restaurante", slug: "restaurante-baixa" },
+      { vertical: "imobiliaria", slug: "imobiliaria-baixa" },
+    ];
+    for (const [index, { vertical, slug }] of cases.entries()) {
+      const selected = (await handleDemoPickerFunction({
+        store,
+        scheduler,
+        call: { name: "select_demo_vertical", arguments: { vertical } },
+        fromE164: `+35191000008${index}`,
+        now: NOW,
+      })) as { ok: boolean; slug: string; speak?: string; message?: string };
+      const business = store.getBusinessBySlug(slug)!;
+      expect(selected.ok).toBe(true);
+      expect(selected.slug).toBe(slug);
+      expect(selected.speak).toBe(demoVerticalOpener(business));
+      expect(selected.message).toBe(selected.speak);
+      expect(selected.speak).toContain(business.name);
+      expect(selected.speak).not.toMatch(/perfeito|preparar|celular|vocês|a gente/i);
+    }
   });
 });
