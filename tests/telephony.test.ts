@@ -291,7 +291,7 @@ describe("demo DID picker tools", () => {
     expect(selected.speak).not.toMatch(/perfeito/i);
     expect(selected.speak).not.toMatch(/preparar/i);
     expect(selected.speak).not.toMatch(/Olá! Sou/);
-    expect(selected.speak.split(/[.!?]+/).filter((part) => part.trim()).length).toBeLessThanOrEqual(2);
+    expect(String(selected.speak).split(/[.!?]+/).filter((part) => part.trim()).length).toBeLessThanOrEqual(2);
     expect(String(selected.instruction)).toMatch(/get_slots|book_appointment/);
     expect(String(selected.instruction)).not.toMatch(/Fuso:|Não te apresentes como uma demo/);
     expect(JSON.stringify(selected)).not.toMatch(/buildLiveInstructions/);
@@ -343,7 +343,7 @@ describe("demo DID picker tools", () => {
     expect(selected.speak).not.toMatch(/perfeito/i);
     expect(selected.speak).not.toMatch(/preparar/i);
     expect(selected.speak).not.toMatch(/Olá! Sou/);
-    expect(selected.speak.split(/[.!?]+/).filter((part) => part.trim()).length).toBeLessThanOrEqual(2);
+    expect(String(selected.speak).split(/[.!?]+/).filter((part) => part.trim()).length).toBeLessThanOrEqual(2);
     expect(String(selected.instruction)).toMatch(/get_slots|book_appointment/);
   });
 
