@@ -86,24 +86,69 @@ export const LIVE_VOICE_TOOLS: LiveFunctionTool[] = [
   },
 ];
 
-function withOptionalVertical(tool: LiveFunctionTool): LiveFunctionTool {
-  return {
-    ...tool,
-    parameters: {
-      ...tool.parameters,
-      properties: {
-        ...tool.parameters.properties,
-        vertical: {
-          type: "string",
-          description: "Demo vertical already chosen (clinica, barbearia, restaurante, oficina, imobiliaria).",
-        },
-      },
-    },
-  };
+/**
+ * Demo DID Live session has no tools. There is no calendar on this call;
+ * availability and booking are spoken, not delegated.
+ */
+export const LIVE_PICKER_TOOLS: LiveFunctionTool[] = [];
+
+export type LiveBookingMode = "tools" | "simulate";
+
+/** Spoken confirmation the demo receptionist can say without a tool. */
+export function demoSimulatedConfirmation(business: Business): string {
+  const pt = business.locale === "pt";
+  switch (business.useCase) {
+    case "clinica":
+      return pt
+        ? "A consulta de dermatologia fica quinta-feira às 10h00. Está marcada. Envio confirmação por SMS."
+        : "The dermatology appointment is Thursday at 10:00. It's booked. I'll send an SMS confirmation.";
+    case "barbearia":
+    case "salao":
+      return pt
+        ? "O corte de cabelo fica amanhã às 15h00. Está marcado. Envio confirmação por SMS."
+        : "The haircut is tomorrow at 15:00. It's booked. I'll send an SMS confirmation.";
+    case "restaurante":
+      return pt
+        ? "A mesa para duas pessoas fica sábado às 20h00. Está marcada. Envio confirmação por SMS."
+        : "The table for two is Saturday at 20:00. It's booked. I'll send an SMS confirmation.";
+    case "oficina":
+      return pt
+        ? "A revisão fica sexta-feira às 09h30. Está marcada. Envio confirmação por SMS."
+        : "The service is Friday at 09:30. It's booked. I'll send an SMS confirmation.";
+    case "imobiliaria":
+      return pt
+        ? "A visita ao imóvel fica terça-feira às 16h00. Está marcada. Envio confirmação por SMS."
+        : "The viewing is Tuesday at 16:00. It's booked. I'll send an SMS confirmation.";
+    case "ginasio":
+      return pt
+        ? "A aula experimental fica quarta-feira às 18h00. Está marcada. Envio confirmação por SMS."
+        : "The trial class is Wednesday at 18:00. It's booked. I'll send an SMS confirmation.";
+    case "outro":
+      return pt
+        ? "A marcação fica amanhã às 11h00. Está marcada. Envio confirmação por SMS."
+        : "The booking is tomorrow at 11:00. It's booked. I'll send an SMS confirmation.";
+    default: {
+      const exhaustive: never = business.useCase;
+      throw new Error(`Unknown use case: ${String(exhaustive)}`);
+    }
+  }
 }
 
-/** Booking tools only. Scenario choice is not a tool — the live prompt already holds every guião. */
-export const LIVE_PICKER_TOOLS: LiveFunctionTool[] = LIVE_VOICE_TOOLS.map(withOptionalVertical);
+function simulateBookingScript(business: Business, ask: string): string[] {
+  const example = demoSimulatedConfirmation(business);
+  if (business.locale === "en") {
+    return [
+      `${ask} Offer a plausible slot out loud now, with no tool and no waiting.`,
+      `If they accept, confirm in the same turn: the service, the day and time, that it is booked, and that an SMS confirmation goes out. Example: "${example}".`,
+      "Never say you will confirm and then stop. If a later step would need validation (SMS code, payment, identity, a calendar write, a human check), simulate that validation and confirm in the same turn.",
+    ];
+  }
+  return [
+    `${ask} Propõe já um horário plausível em português de Portugal, sem chamar ferramenta e sem esperar.`,
+    `Se o cliente aceitar, confirma na mesma vez em voz alta: o serviço, o dia e a hora, que está marcada, e que envias confirmação por SMS. Exemplo: «${example}».`,
+    "Nunca digas «vou confirmar» e fiques calado. Se alguma validação for precisa (código SMS, pagamento, identidade, escrita no calendário, uma pessoa), simula-a e confirma na mesma vez.",
+  ];
+}
 
 export function liveVoiceForGender(gender: AgentGender): string {
   switch (gender) {
@@ -139,8 +184,12 @@ export function formatHoursSummary(hours: WeeklyHours, locale: "pt" | "en"): str
     .join("; ");
 }
 
-export function buildLiveInstructions(business: Business): string {
+export function buildLiveInstructions(
+  business: Business,
+  opts: { booking?: LiveBookingMode } = {},
+): string {
   const agent = business.agentName || DEFAULT_AGENT_NAME;
+  const booking = opts.booking ?? "tools";
   const services = business.services
     .map((s) => {
       const price = s.priceCents !== null ? ` (${(s.priceCents / 100).toFixed(0)}€)` : "";
@@ -148,17 +197,15 @@ export function buildLiveInstructions(business: Business): string {
     })
     .join("; ");
   const hours = formatHoursSummary(business.hours, business.locale);
+  const bookingRules = bookingLiveRules(business, booking);
 
   if (business.locale === "en") {
     return [
       `You are ${agent}, the appointment voice agent for ${business.name}.`,
       "Speak English. Keep replies short, like a phone call — one or two sentences.",
       `Timezone: ${business.timezone}. Hours: ${hours}. Services: ${services}.`,
-      ...verticalLiveRules(business),
-      "Use tools for availability and booking. Never invent free slots. Only confirm a booking after book_appointment returns ok.",
-      "After a tool returns, speak the result immediately: the date, the time, and whether it is booked. Never stall with 'one moment', 'starting', or filler — the caller must hear times or a taken-slot alternative in the same turn.",
-      "Ask the customer's name before booking. If a tool errors, say so briefly and offer another time.",
-      "Short phone replies; delegate availability and booking; never invent slots.",
+      ...verticalLiveRules(business, booking),
+      ...bookingRules,
       "Do not introduce yourself as a product demo. You are the live receptionist for this business.",
     ].join(" ");
   }
@@ -168,89 +215,171 @@ export function buildLiveInstructions(business: Business): string {
     "Fala sempre português de Portugal (não brasileiro): usa «marcação», «telemóvel», «consulta», evita sotaque e vocabulário do Brasil (celular, vocês aí, a gente, horáriozinho).",
     "Respostas curtas, estilo chamada telefónica — uma ou duas frases.",
     `Fuso: ${business.timezone}. Horário: ${hours}. Serviços: ${services}.`,
-    ...verticalLiveRules(business),
-    "Usa as ferramentas para disponibilidade e marcações. Nunca inventes horários livres. Só confirma uma marcação depois de book_appointment devolver ok.",
-    "Assim que uma ferramenta devolver, diz já o resultado em voz alta: a data, a hora, e se ficou marcada. Nunca fiques em «um momento», «a começar» ou a pensar — o cliente tem de ouvir horários ou uma alternativa na mesma vez.",
-    "Pede o nome do cliente antes de marcar. Se uma ferramenta falhar, diz-o em breve e oferece outra hora.",
-    "Respostas curtas ao telefone; delega disponibilidade e marcações; nunca inventes horários.",
+    ...verticalLiveRules(business, booking),
+    ...bookingRules,
     "Não te apresentes como uma demo de produto. És a recepção ao vivo deste negócio.",
   ].join(" ");
 }
 
-function verticalLiveRules(business: Business): string[] {
+function bookingLiveRules(business: Business, booking: LiveBookingMode): string[] {
   const pt = business.locale === "pt";
+  switch (booking) {
+    case "tools":
+      return pt
+        ? [
+            "Usa as ferramentas para disponibilidade e marcações. Nunca inventes horários livres. Só confirma uma marcação depois de book_appointment devolver ok.",
+            "Assim que uma ferramenta devolver, diz já o resultado em voz alta: a data, a hora, e se ficou marcada. Nunca fiques em «um momento», «a começar» ou a pensar — o cliente tem de ouvir horários ou uma alternativa na mesma vez.",
+            "Pede o nome do cliente antes de marcar. Se uma ferramenta falhar, diz-o em breve e oferece outra hora.",
+            "Respostas curtas ao telefone; delega disponibilidade e marcações; nunca inventes horários.",
+          ]
+        : [
+            "Use tools for availability and booking. Never invent free slots. Only confirm a booking after book_appointment returns ok.",
+            "After a tool returns, speak the result immediately: the date, the time, and whether it is booked. Never stall with 'one moment', 'starting', or filler — the caller must hear times or a taken-slot alternative in the same turn.",
+            "Ask the customer's name before booking. If a tool errors, say so briefly and offer another time.",
+            "Short phone replies; delegate availability and booking; never invent slots.",
+          ];
+    case "simulate":
+      return pt
+        ? [
+            "Não chames get_slots, book_appointment, list_bookings, cancel_appointment nem qualquer outra ferramenta. Não esperes por um resultado.",
+            "Disponibilidade e marcações são simuladas em voz alta. Oferece um horário plausível. Se o cliente aceitar, confirma já: o serviço, o dia e a hora, que está marcada, e que envias confirmação por SMS.",
+            "Nunca digas «vou confirmar» e cries silêncio.",
+          ]
+        : [
+            "Do not call get_slots, book_appointment, list_bookings, cancel_appointment, or any other tool. Do not wait.",
+            "Availability and booking are simulated in speech. Offer a plausible slot. If they accept, confirm now: the service, the day and time, that it is booked, and that an SMS confirmation goes out.",
+            "Never say you will confirm and then stop.",
+          ];
+    default: {
+      const exhaustive: never = booking;
+      throw new Error(`Unknown booking mode: ${String(exhaustive)}`);
+    }
+  }
+}
+
+function verticalLiveRules(business: Business, booking: LiveBookingMode): string[] {
+  const pt = business.locale === "pt";
+  const simulate = booking === "simulate";
   switch (business.useCase) {
     case "clinica":
       return pt
         ? [
             "És a recepção da clínica: só marcas consultas. Nunca dês conselhos médicos, diagnósticos, triagem de sintomas nem opiniões clínicas.",
-            "Pergunta a especialidade (clínica geral, dermatologia, pediatria, medicina dentária, ou as que o negócio listar), propõe horários reais com as ferramentas, confirma o nome e o telemóvel, e diz que envias um SMS de confirmação.",
+            ...(simulate
+              ? simulateBookingScript(
+                  business,
+                  "Pergunta a especialidade (clínica geral, dermatologia, pediatria, medicina dentária, ou as que o negócio listar).",
+                )
+              : [
+                  "Pergunta a especialidade (clínica geral, dermatologia, pediatria, medicina dentária, ou as que o negócio listar), propõe horários reais com as ferramentas, confirma o nome e o telemóvel, e diz que envias um SMS de confirmação.",
+                ]),
           ]
         : [
             "You are the clinic receptionist. You only book consultations — never give medical advice, diagnoses, symptom triage, or clinical opinions.",
-            "Ask which specialty they need, propose real slots from tools, confirm name and phone, then say you will send an SMS confirmation.",
+            ...(simulate
+              ? simulateBookingScript(business, "Ask which specialty they need.")
+              : [
+                  "Ask which specialty they need, propose real slots from tools, confirm name and phone, then say you will send an SMS confirmation.",
+                ]),
           ];
     case "barbearia":
       return pt
         ? [
             "És a recepção da barbearia: marcas corte, barba e corte infantil. Não dês consultoria de estilo longa.",
-            "Pergunta o serviço, propõe horários reais com as ferramentas, confirma o nome e o telemóvel.",
+            ...(simulate
+              ? simulateBookingScript(business, "Pergunta o serviço.")
+              : ["Pergunta o serviço, propõe horários reais com as ferramentas, confirma o nome e o telemóvel."]),
           ]
         : [
             "You are the barbershop receptionist: book haircuts, beard trims, and kids' cuts. Do not give long style advice.",
-            "Ask which service, propose real slots from tools, confirm name and phone.",
+            ...(simulate
+              ? simulateBookingScript(business, "Ask which service.")
+              : ["Ask which service, propose real slots from tools, confirm name and phone."]),
           ];
     case "salao":
       return pt
         ? [
             "És a recepção do salão: marcas corte, coloração, brushing e manicure.",
-            "Pergunta o serviço, propõe horários reais com as ferramentas, confirma o nome e o telemóvel.",
+            ...(simulate
+              ? simulateBookingScript(business, "Pergunta o serviço.")
+              : ["Pergunta o serviço, propõe horários reais com as ferramentas, confirma o nome e o telemóvel."]),
           ]
         : [
             "You are the salon receptionist: book cuts, colour, blow-dry, and manicure.",
-            "Ask which service, propose real slots from tools, confirm name and phone.",
+            ...(simulate
+              ? simulateBookingScript(business, "Ask which service.")
+              : ["Ask which service, propose real slots from tools, confirm name and phone."]),
           ];
     case "restaurante":
       return pt
         ? [
             "És a recepção do restaurante: tratas reservas de mesa. Não tomes pedidos de comida nesta chamada.",
-            "Pergunta quantas pessoas e a hora, propõe horários reais com as ferramentas, confirma o nome e o telemóvel.",
+            ...(simulate
+              ? simulateBookingScript(business, "Pergunta quantas pessoas e a hora.")
+              : ["Pergunta quantas pessoas e a hora, propõe horários reais com as ferramentas, confirma o nome e o telemóvel."]),
           ]
         : [
             "You are the restaurant receptionist: take table reservations. Do not take food orders on this call.",
-            "Ask party size and time, propose real slots from tools, confirm name and phone.",
+            ...(simulate
+              ? simulateBookingScript(business, "Ask party size and time.")
+              : ["Ask party size and time, propose real slots from tools, confirm name and phone."]),
           ];
     case "oficina":
       return pt
         ? [
             "És o balcão da oficina: marcas diagnóstico, revisão e pneus. Não dês diagnóstico mecânico ao telefone.",
-            "Pergunta o serviço e o veículo se o cliente o disser, propõe horários reais com as ferramentas, confirma o nome e o telemóvel.",
+            ...(simulate
+              ? simulateBookingScript(business, "Pergunta o serviço e o veículo se o cliente o disser.")
+              : [
+                  "Pergunta o serviço e o veículo se o cliente o disser, propõe horários reais com as ferramentas, confirma o nome e o telemóvel.",
+                ]),
           ]
         : [
             "You are the garage desk: book diagnosis, servicing, and tyres. Do not diagnose the car on the phone.",
-            "Ask which service, propose real slots from tools, confirm name and phone.",
+            ...(simulate
+              ? simulateBookingScript(business, "Ask which service.")
+              : ["Ask which service, propose real slots from tools, confirm name and phone."]),
           ];
     case "imobiliaria":
       return pt
         ? [
             "És a recepção da imobiliária: marcas visitas e avaliações. Não dês aconselhamento jurídico nem avaliações de preço.",
-            "Pergunta o imóvel ou a zona, propõe horários reais com as ferramentas, confirma o nome e o telemóvel.",
+            ...(simulate
+              ? simulateBookingScript(business, "Pergunta o imóvel ou a zona.")
+              : ["Pergunta o imóvel ou a zona, propõe horários reais com as ferramentas, confirma o nome e o telemóvel."]),
           ]
         : [
             "You are the estate-agency receptionist: book viewings and valuations. Do not give legal or price advice.",
-            "Ask which property or area, propose real slots from tools, confirm name and phone.",
+            ...(simulate
+              ? simulateBookingScript(business, "Ask which property or area.")
+              : ["Ask which property or area, propose real slots from tools, confirm name and phone."]),
           ];
     case "ginasio":
       return pt
         ? [
             "És a recepção do ginásio: marcas aulas experimentais e personal trainer.",
-            "Pergunta a aula, propõe horários reais com as ferramentas, confirma o nome e o telemóvel.",
+            ...(simulate
+              ? simulateBookingScript(business, "Pergunta a aula.")
+              : ["Pergunta a aula, propõe horários reais com as ferramentas, confirma o nome e o telemóvel."]),
           ]
         : [
             "You are the gym receptionist: book trial classes and personal training.",
-            "Ask which class, propose real slots from tools, confirm name and phone.",
+            ...(simulate
+              ? simulateBookingScript(business, "Ask which class.")
+              : ["Ask which class, propose real slots from tools, confirm name and phone."]),
           ];
     case "outro":
+      if (simulate) {
+        return pt
+          ? [
+              "Marca o serviço que o cliente pedir em voz alta. Não improvises um guião de demonstração.",
+              ...simulateBookingScript(business, "Pergunta o serviço."),
+            ]
+          : [
+              "Book the service the caller asks for in speech. Do not improvise a demo script.",
+              ...simulateBookingScript(business, "Ask which service."),
+            ];
+      }
       return pt
         ? ["Marca o serviço que o cliente pedir usando as ferramentas. Não improvises um guião de demonstração."]
         : ["Book the service the caller asks for using tools. Do not improvise a demo script."];
@@ -286,7 +415,8 @@ export function buildLiveSessionConfig(business: Business): Record<string, unkno
  * One continuous gpt-live-1 session: Atende picker plus every demo vertical's
  * full receptionist script from the first second. GPT-Live cannot swap
  * instructions mid-call; after the caller confirms, the same voice follows
- * that option's existing rules (services, what to ask, what never to do, tools).
+ * that option's existing rules (services, what to ask, what never to do).
+ * Availability and booking are simulated in speech — the demo session has no tools.
  */
 export function buildDemoPickerLiveInstructions(businesses: Business[]): string {
   const bySlug = new Map(businesses.map((business) => [business.slug, business]));
@@ -296,7 +426,7 @@ export function buildDemoPickerLiveInstructions(businesses: Business[]): string 
   const blocks = listDemoOptions().map((option, index) => {
     const business = bySlug.get(option.slug);
     const rules = business
-      ? buildLiveInstructions(business)
+      ? buildLiveInstructions(business, { booking: "simulate" })
       : `${option.label}: ${option.hint}.`;
     return `Opção ${index + 1} (${option.useCase}): depois de confirmada, és a recepção da ${business?.name ?? option.label}. ${rules}`;
   });
@@ -308,7 +438,8 @@ export function buildDemoPickerLiveInstructions(businesses: Business[]): string 
     "Não digas que estás a transferir nem uses um menu robótico. Continua nesta chamada.",
     "Até o cliente confirmar uma opção, não marques nada e não entres na recepção de um negócio.",
     "Quando confirmar o nome ou o número (1-5), fala já como a recepção dessa opção — a saudação e a pergunta seguinte do guião que já está nestas instruções. Não chames nenhuma ferramenta para escolher o cenário. Não esperes por um resultado. Não digas «perfeito», «a preparar», «vamos à oficina», nem que estás a transferir.",
-    "As ferramentas (get_slots, book_appointment, list_bookings, cancel_appointment) só existem para horários reais e marcações, depois de estares na personagem. Passa vertical em cada chamada. Nunca inventes horários. O GPT-Live não troca o guião a meio da chamada; as regras de cada opção já estão aqui.",
+    "Não chames get_slots, book_appointment, list_bookings, cancel_appointment nem qualquer outra ferramenta, em nenhuma das cinco opções. Não esperes. Disponibilidade e marcações são simuladas em voz alta. Se o cliente aceitar um horário, confirma já o serviço, o dia e a hora, que está marcada, e que envias SMS. Nunca digas «vou confirmar» e cries silêncio.",
+    "O GPT-Live não troca o guião a meio da chamada; as regras de cada opção já estão aqui.",
     "Não voltes a listar as opções a menos que peçam para mudar de demonstração.",
     "Respostas curtas, estilo chamada telefónica — uma ou duas frases.",
     ...blocks,
@@ -325,11 +456,11 @@ export function buildDemoPickerBackendInstructions(businesses: Business[]): stri
     })
     .join(". ");
   return [
-    "You are the Atende demo booking backend for a Portuguese (pt-PT) voice call.",
-    "Do not call a tool when the caller picks a vertical. The live model already has every receptionist script and greets in character without you.",
-    "Call get_slots / book_appointment / list_bookings / cancel_appointment only for real availability and booking. Pass vertical (clinica, barbearia, restaurante, oficina, imobiliaria) on each tool call.",
+    "You are the Atende demo voice backend for a Portuguese (pt-PT) call. Do not call any tool. There is no calendar on this session.",
+    "Do not call a tool when the caller picks a vertical. The live model already has every receptionist script, greets in character, and simulates availability and booking in speech.",
+    "Never call get_slots, book_appointment, list_bookings, cancel_appointment, or any other function. Never wait. Never say you will confirm and then stop.",
     `Verticals: ${catalogs}.`,
-    "Never invent slots. Never give medical, legal, or mechanical advice.",
+    "Never give medical, legal, or mechanical advice.",
   ].join(" ");
 }
 
@@ -347,7 +478,7 @@ export function buildDemoPickerLiveSessionConfig(businesses: Business[]): Record
       type: "responses",
       responses: {
         model: config.voice.openaiLiveBackendModel || LIVE_BACKEND_MODEL_DEFAULT,
-        tool_choice: "auto",
+        tool_choice: "none",
         tools: LIVE_PICKER_TOOLS,
         instructions: buildDemoPickerBackendInstructions(businesses),
       },

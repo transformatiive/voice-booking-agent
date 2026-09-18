@@ -9,6 +9,7 @@ import {
   buildDemoPickerLiveSessionConfig,
   buildLiveSessionConfig,
   createLiveWebRtcSession,
+  demoSimulatedConfirmation,
   parseLiveIncomingWebhook,
   parseToolArguments,
   sessionForDemoDidInbound,
@@ -107,22 +108,30 @@ describe("gpt-live-1 session config", () => {
     expect(instructions).toMatch(/diagnóstico mecânico/);
     expect(instructions).toMatch(/Imobiliária Baixa/);
     expect(instructions).toMatch(/visitas e avaliações/);
+    expect(instructions).toMatch(/Nunca digas «vou confirmar»/);
+    expect(instructions).toMatch(/Disponibilidade e marcações são simuladas/);
     expect(instructions).not.toMatch(/Sofia/);
     expect(instructions).not.toMatch(/celular(?!,)/);
+    for (const business of businesses) {
+      const spoken = demoSimulatedConfirmation(business);
+      expect(spoken).toMatch(/Está marcada|Está marcado/);
+      expect(spoken).toMatch(/Envio confirmação por SMS/);
+      expect(instructions).toContain(spoken);
+    }
     const backend = String(
       session.delegation && (session.delegation as { responses?: { instructions?: string } }).responses?.instructions,
     );
     expect(backend).not.toMatch(/select_demo_vertical/);
     expect(backend).toMatch(/Do not call a tool when the caller picks a vertical/);
+    expect(backend).toMatch(/Never call get_slots/);
     expect(backend).toMatch(/oficina-norte/);
-    const names = (session.delegation as { responses: { tools: Array<{ name: string }> } }).responses.tools.map(
-      (t) => t.name,
-    );
-    expect(names).not.toContain("select_demo_vertical");
-    expect(names.sort()).toEqual(
-      ["book_appointment", "cancel_appointment", "get_slots", "list_bookings", "list_services"].sort(),
-    );
-    expect(LIVE_PICKER_TOOLS.map((t) => t.name)).not.toContain("select_demo_vertical");
+    const names = (session.delegation as { responses: { tools: Array<{ name: string }>; tool_choice?: string } }).responses
+      .tools;
+    expect(names).toEqual([]);
+    expect(LIVE_PICKER_TOOLS).toEqual([]);
+    expect(
+      (session.delegation as { responses: { tool_choice?: string } }).responses.tool_choice,
+    ).toBe("none");
     expect(buildDemoPickerLiveSessionConfig(businesses).type).toBe("live");
   });
 
