@@ -19,7 +19,6 @@ import {
   rememberedDemoSlug,
   resolveDemoSlugForInbound,
 } from "./demoDid.js";
-import { greeting } from "../agent/conversation.js";
 
 /** Never let a Cal.com (or other) hop block the voice tool loop. */
 export const VOICE_TOOL_TIMEOUT_MS = 1_500;
@@ -340,9 +339,61 @@ export async function handleVoiceFunction(
 
 export const SELECT_DEMO_VERTICAL = "select_demo_vertical";
 
-/** Compact tool result so gpt-live speaks the vertical greeting instead of waiting for an instruction swap. */
+function joinServiceNames(business: Business): string {
+  const names = business.services.map((service) => service.name);
+  const or = business.locale === "pt" ? "ou" : "or";
+  if (names.length === 0) {
+    return business.locale === "pt" ? "o serviço" : "the service";
+  }
+  if (names.length === 1) {
+    return names[0];
+  }
+  return `${names.slice(0, -1).join(", ")} ${or} ${names[names.length - 1]}`;
+}
+
+/**
+ * First spoken line after the caller locks a demo vertical — the scenario
+ * question, not a re-greeting or «perfeito, vamos à oficina».
+ */
+export function demoVerticalOpener(business: Business): string {
+  const named = joinServiceNames(business);
+  const pt = business.locale === "pt";
+  switch (business.useCase) {
+    case "oficina":
+      return pt
+        ? `Quer ${named}? Diga o serviço e o veículo, se o mencionar.`
+        : `Do you need ${named}? Say the service, and the car if you mention it.`;
+    case "clinica":
+      return pt
+        ? `Que especialidade precisa: ${named}?`
+        : `Which specialty do you need: ${named}?`;
+    case "barbearia":
+    case "salao":
+      return pt ? `O que pretende: ${named}?` : `What would you like: ${named}?`;
+    case "restaurante":
+      return pt
+        ? `Para quantas pessoas é a reserva — duas, quatro ou um grupo?`
+        : `How many people is the table for — two, four, or a group?`;
+    case "imobiliaria":
+      return pt
+        ? `Quer ${named}? Diga o imóvel ou a zona.`
+        : `Would you like ${named}? Say the property or area.`;
+    case "ginasio":
+      return pt ? `Que aula pretende: ${named}?` : `Which class would you like: ${named}?`;
+    case "outro":
+      return pt
+        ? `O que pretende marcar? Temos ${named}.`
+        : `What would you like to book? We have ${named}.`;
+    default: {
+      const exhaustive: never = business.useCase;
+      throw new Error(`Unknown use case: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/** Compact tool result: scenario opener in speak, one-line booking-tool instruction. */
 export function demoVerticalReadyResult(business: Business): Record<string, unknown> {
-  const speak = greeting(business);
+  const speak = demoVerticalOpener(business);
   return {
     ok: true,
     slug: business.slug,
@@ -351,7 +402,10 @@ export function demoVerticalReadyResult(business: Business): Record<string, unkn
     services: business.services.map((service) => service.name),
     speak,
     message: speak,
-    instruction: `A opção está confirmada. Fala já como a recepção da ${business.name}. Não digas que estás a preparar o cenário, a carregar ou à espera de novas instruções — o GPT-Live não troca o guião a meio da chamada. Cumprimenta e pergunta o serviço.`,
+    instruction:
+      business.locale === "en"
+        ? "Continue booking with get_slots and book_appointment."
+        : "Continua a marcação com get_slots e book_appointment.",
   };
 }
 

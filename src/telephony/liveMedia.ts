@@ -360,7 +360,7 @@ function stringField(rec: Record<string, unknown>, key: string): string | undefi
 /**
  * GPT-Live `response.create` continues the Responses backend; it does not make the
  * voice speak. After the demo picker locks a vertical, append commentary so the
- * caller hears the greeting instead of «a preparar o cenário».
+ * caller hears the scenario opener instead of «a preparar o cenário».
  */
 export function spokenCueAfterTool(name: string, output: Record<string, unknown>): string | undefined {
   if (name !== "select_demo_vertical") {
