@@ -11,24 +11,22 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Wordmark } from "@/components/wordmark";
-import {
-  ACCENT,
-  ACCENT_BRIGHT,
-  ACCENT_DARK,
-  ACCENT_SOFT,
-  BODY,
-  DISPLAY,
-  INK,
-  LINE,
-  MONO,
-  MUTED,
-  PANEL,
-  SANS,
-  SURFACE,
-} from "@/lib/brand";
-import { MenuIcon } from "lucide-react";
+
+/* ------------------------------------------------------------------ tokens */
+
+const INK = "#0e1a24";
+const BODY = "#47586a";
+const MUTED = "#5a6b7b";
+const SURFACE = "#f6f8fa";
+const LINE = "#e4eaf0";
+const ACCENT = "oklch(0.50 0.13 168)";
+const ACCENT_BRIGHT = "oklch(0.58 0.14 168)";
+const ACCENT_DARK = "oklch(0.42 0.11 168)";
+const ACCENT_SOFT = "oklch(0.95 0.035 168)";
+const PANEL = "linear-gradient(170deg,#132330 0%,#0c151e 70%)";
+const SANS = "'Public Sans',system-ui,sans-serif";
+const DISPLAY = "Manrope,sans-serif";
+const MONO = "'JetBrains Mono',monospace";
 
 /* ---------------------------------------------------------------- content */
 
@@ -231,48 +229,45 @@ interface DemoPayload {
   did: { e164: string; nsn: string; display: string; displayIntl: string; tel: string };
 }
 
-const NAV_LINKS = [
-  { href: "#como-funciona", label: "Como funciona" },
-  { href: "#para-quem", label: "Para quem é" },
-  { href: "#fluxo", label: "A chamada" },
-  { href: "#ofertas", label: "Planos" },
-  { href: "#retorno", label: "Retorno" },
-  { href: "#faq", label: "Perguntas" },
-];
-
-const ROI_TYPES = [
-  { value: "barbearia", label: "Barbearia" },
-  { value: "salao", label: "Salão" },
-  { value: "estetica", label: "Estética" },
-  { value: "clinica", label: "Clínica" },
-  { value: "restaurante", label: "Restaurante" },
-  { value: "servicos", label: "Serviços profissionais" },
-  { value: "outro", label: "Outro" },
-];
-
-const PLAN_LABEL: Record<string, string> = {
-  base: "Essencial",
-  pro: "Pro",
-  studio: "Estúdio",
-};
-
-const GENDER_LABEL: Record<string, string> = {
-  feminino: "Feminina",
-  masculino: "Masculina",
-  neutro: "Neutra",
-};
-
-const LOCALE_LABEL: Record<string, string> = {
-  pt: "Português",
-  en: "Inglês",
-};
-
-const NUMBER_LABEL: Record<string, string> = {
-  new: "Novo número +351",
-  port: "Portar o meu número",
-};
-
 /* ----------------------------------------------------------------- pieces */
+
+function Wordmark({ size = 25, color = INK }: { size?: number; color?: string }) {
+  const cap = Math.round(size * 0.72);
+  const bar = Math.max(3, Math.round(cap / 4.5));
+  return (
+    <span style={{ display: "flex", alignItems: "flex-end", gap: size > 22 ? 3 : 2 }}>
+      <span
+        style={{
+          fontFamily: DISPLAY,
+          fontWeight: 800,
+          fontSize: size,
+          letterSpacing: "-0.04em",
+          lineHeight: 0.72,
+          color,
+        }}
+      >
+        ATEND
+      </span>
+      <span
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          width: Math.round(cap * 1.05),
+          height: cap,
+        }}
+      >
+        {["100%", "66%", "88%"].map((w) => (
+          <i
+            key={w}
+            style={{ display: "block", height: bar, width: w, borderRadius: 99, background: ACCENT_BRIGHT }}
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
 
 function Pill({ children }: { children: React.ReactNode }) {
   return (
@@ -360,7 +355,6 @@ export function Landing() {
   const [plans, setPlans] = useState<Plan[]>(FALLBACK_PLANS);
   const [onboardOpen, setOnboardOpen] = useState(false);
   const [planId, setPlanId] = useState("pro");
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const [bizType, setBizType] = useState("barbearia");
   const [calls, setCalls] = useState(12);
@@ -416,24 +410,26 @@ export function Landing() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
+              flexWrap: "wrap",
               gap: 16,
               maxWidth: 1180,
               margin: "0 auto",
-              padding: "14px max(16px, env(safe-area-inset-right, 0px)) 14px max(16px, env(safe-area-inset-left, 0px))",
+              padding: "14px 28px",
             }}
           >
-            <a href="#topo" aria-label="Atende">
+            <a href="#topo">
               <Wordmark />
             </a>
-            <nav className="atd-nav" style={{ flexWrap: "wrap", gap: 24, fontSize: 14, color: BODY }}>
-              {NAV_LINKS.map((item) => (
-                <a key={item.href} href={item.href}>
-                  {item.label}
-                </a>
-              ))}
+            <nav style={{ display: "flex", flexWrap: "wrap", gap: 24, fontSize: 14, color: BODY }}>
+              <a href="#como-funciona">Como funciona</a>
+              <a href="#para-quem">Para quem é</a>
+              <a href="#fluxo">A chamada</a>
+              <a href="#ofertas">Planos</a>
+              <a href="#retorno">Retorno</a>
+              <a href="#faq">Perguntas</a>
             </nav>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <a className="atd-phone" href={did.tel} style={{ fontFamily: MONO, fontSize: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <a href={did.tel} style={{ fontFamily: MONO, fontSize: 14 }}>
                 {did.display}
               </a>
               <button
@@ -442,8 +438,7 @@ export function Landing() {
                 style={{
                   border: 0,
                   cursor: "pointer",
-                  padding: "12px 18px",
-                  minHeight: 44,
+                  padding: "12px 20px",
                   borderRadius: 999,
                   background: INK,
                   color: "#fff",
@@ -454,16 +449,6 @@ export function Landing() {
               >
                 Criar assistente
               </button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="atd-menu"
-                aria-label="Abrir menu"
-                onClick={() => setMenuOpen(true)}
-              >
-                <MenuIcon />
-              </Button>
             </div>
           </div>
         </header>
@@ -484,7 +469,7 @@ export function Landing() {
               margin: "0 auto",
               padding: "80px 28px 72px",
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,330px),1fr))",
+              gridTemplateColumns: "repeat(auto-fit,minmax(330px,1fr))",
               gap: 56,
               alignItems: "center",
             }}
@@ -728,7 +713,7 @@ export function Landing() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,300px),1fr))",
+              gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
               gap: 20,
               marginTop: 38,
             }}
@@ -770,7 +755,7 @@ export function Landing() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,320px),1fr))",
+              gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
               gap: 20,
               marginTop: 40,
               alignItems: "start",
@@ -945,7 +930,7 @@ export function Landing() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,300px),1fr))",
+                gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))",
                 gap: 20,
                 marginTop: 42,
               }}
@@ -1111,7 +1096,7 @@ export function Landing() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,320px),1fr))",
+              gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
               gap: 24,
               marginTop: 40,
               alignItems: "stretch",
@@ -1121,20 +1106,29 @@ export function Landing() {
               <label style={{ display: "block", fontFamily: DISPLAY, fontSize: 15, fontWeight: 700 }}>
                 Tipo de negócio
               </label>
-              <Select value={bizType} onValueChange={(value) => value && applyPreset(String(value))}>
-                <SelectTrigger className="mt-2.5 h-11 w-full rounded-xl">
-                  <SelectValue>{ROI_TYPES.find((item) => item.value === bizType)?.label ?? bizType}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {ROI_TYPES.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+              <select
+                value={bizType}
+                onChange={(e) => applyPreset(e.target.value)}
+                style={{
+                  width: "100%",
+                  marginTop: 10,
+                  padding: "13px 14px",
+                  borderRadius: 12,
+                  border: "1px solid #d7e0e8",
+                  background: "#fff",
+                  fontFamily: SANS,
+                  fontSize: 15,
+                  color: INK,
+                }}
+              >
+                <option value="barbearia">Barbearia</option>
+                <option value="salao">Salão</option>
+                <option value="estetica">Estética</option>
+                <option value="clinica">Clínica</option>
+                <option value="restaurante">Restaurante</option>
+                <option value="servicos">Serviços profissionais</option>
+                <option value="outro">Outro</option>
+              </select>
 
               <SliderRow label="Chamadas perdidas por semana" value={String(calls)}>
                 <input
@@ -1392,37 +1386,6 @@ export function Landing() {
       </div>
 
       <OnboardDialog open={onboardOpen} onOpenChange={setOnboardOpen} planId={planId} onPlanChange={setPlanId} />
-      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="right" className="w-[min(100%,20rem)]">
-          <SheetHeader>
-            <SheetTitle>Menu</SheetTitle>
-          </SheetHeader>
-          <nav className="flex flex-col gap-1 px-4 pb-4">
-            {NAV_LINKS.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="flex min-h-11 items-center text-sm"
-                onClick={() => setMenuOpen(false)}
-              >
-                {item.label}
-              </a>
-            ))}
-            <a href={did.tel} className="flex min-h-11 items-center font-mono text-sm">
-              {did.display}
-            </a>
-            <Button
-              className="mt-2"
-              onClick={() => {
-                setMenuOpen(false);
-                setOnboardOpen(true);
-              }}
-            >
-              Criar assistente
-            </Button>
-          </nav>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
@@ -1525,144 +1488,109 @@ function OnboardDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent layout="viewport">
-        <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
-          <DialogTitle className="font-heading text-lg font-bold tracking-tight">Criar assistente</DialogTitle>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Criar assistente</DialogTitle>
           <DialogDescription>
-            Nós pedimos o número por si. Só o publicamos depois da aprovação. Pode já entrar no backoffice.
+            Nós pedimos o número por si. Só o publicamos depois da aprovação.
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pb-8">
-          <FieldGroup className="gap-3">
-            <Field>
-              <FieldLabel htmlFor="biz-name">Nome do negócio</FieldLabel>
-              <Input
-                id="biz-name"
-                name="organization"
-                autoComplete="organization"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field>
-                <FieldLabel>Tipo</FieldLabel>
-                <Select value={useCase} onValueChange={(value) => value && setUseCase(String(value))}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>{USE_CASES.find((item) => item.value === useCase)?.label ?? useCase}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {USE_CASES.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel>Plano</FieldLabel>
-                <Select value={planId} onValueChange={(value) => value && onPlanChange(String(value))}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>{PLAN_LABEL[planId] ?? planId}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="base">Essencial</SelectItem>
-                      <SelectItem value="pro">Pro</SelectItem>
-                      <SelectItem value="studio">Estúdio</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-            <Field>
-              <FieldLabel htmlFor="agent-name">Nome do assistente</FieldLabel>
-              <Input
-                id="agent-name"
-                name="agent-name"
-                autoComplete="off"
-                value={agentName}
-                onChange={(e) => setAgentName(e.target.value)}
-              />
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field>
-                <FieldLabel>Voz</FieldLabel>
-                <Select value={agentGender} onValueChange={(value) => value && setAgentGender(String(value))}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>{GENDER_LABEL[agentGender] ?? agentGender}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="feminino">Feminina</SelectItem>
-                      <SelectItem value="masculino">Masculina</SelectItem>
-                      <SelectItem value="neutro">Neutra</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel>Idioma</FieldLabel>
-                <Select value={locale} onValueChange={(value) => value && setLocale(String(value))}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>{LOCALE_LABEL[locale] ?? locale}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="pt">Português</SelectItem>
-                      <SelectItem value="en">Inglês</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="phone">Telemóvel</FieldLabel>
-                <Input
-                  id="phone"
-                  name="tel"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-                <FieldDescription>Opcional, para reconhecermos a chamada da demo.</FieldDescription>
-              </Field>
-            </div>
-            <Field>
-              <FieldLabel>Número</FieldLabel>
-              <Select value={numberPreference} onValueChange={(value) => value && setNumberPreference(String(value))}>
-                <SelectTrigger className="w-full">
-                  <SelectValue>{NUMBER_LABEL[numberPreference] ?? numberPreference}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="new">Novo número +351</SelectItem>
-                    <SelectItem value="port">Portar o meu número</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </Field>
-          </FieldGroup>
-        </div>
-        <DialogFooter className="m-0 shrink-0 rounded-none border-t bg-background p-4 sm:rounded-b-xl">
-          <Button className="w-full sm:w-auto" disabled={busy || !name.trim()} onClick={() => void submit()}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="biz-name">Nome do negócio</FieldLabel>
+            <Input id="biz-name" value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field>
+            <FieldLabel>Tipo</FieldLabel>
+            <Select value={useCase} onValueChange={(value) => value && setUseCase(String(value))}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {USE_CASES.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel>Plano</FieldLabel>
+            <Select value={planId} onValueChange={(value) => value && onPlanChange(String(value))}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="base">Essencial</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="studio">Estúdio</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="agent-name">Nome do assistente</FieldLabel>
+            <Input id="agent-name" value={agentName} onChange={(e) => setAgentName(e.target.value)} />
+          </Field>
+          <Field>
+            <FieldLabel>Voz</FieldLabel>
+            <Select value={agentGender} onValueChange={(value) => value && setAgentGender(String(value))}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="feminino">Feminina</SelectItem>
+                  <SelectItem value="masculino">Masculina</SelectItem>
+                  <SelectItem value="neutro">Neutra</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel>Idioma</FieldLabel>
+            <Select value={locale} onValueChange={(value) => value && setLocale(String(value))}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="pt">Português</SelectItem>
+                  <SelectItem value="en">Inglês</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="phone">Telemóvel</FieldLabel>
+            <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <FieldDescription>Opcional, para reconhecermos a chamada da demo.</FieldDescription>
+          </Field>
+          <Field>
+            <FieldLabel>Número</FieldLabel>
+            <Select value={numberPreference} onValueChange={(value) => value && setNumberPreference(String(value))}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="new">Novo número +351</SelectItem>
+                  <SelectItem value="port">Portar o meu número</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+        </FieldGroup>
+        <DialogFooter>
+          <Button disabled={busy || !name.trim()} onClick={() => void submit()}>
             Continuar
           </Button>
         </DialogFooter>
