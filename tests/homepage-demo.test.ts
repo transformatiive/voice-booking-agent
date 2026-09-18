@@ -82,10 +82,12 @@ describe("clinic marketing demo", () => {
 
   it("homepage shows the teal ATENDE landing and the demo DID", () => {
     const landing = readWeb("pages/Landing.tsx");
+    const wordmark = readWeb("components/wordmark.tsx");
+    const brand = readWeb("lib/brand.ts");
     const voice = readWeb("lib/voice-call.ts");
     expect(landing).toContain("O telefone do seu negócio deixa de ficar sem resposta.");
-    expect(landing).toContain("ATEND");
-    expect(landing).toContain("oklch(0.50 0.13 168)");
+    expect(wordmark).toContain("ATEND");
+    expect(brand).toContain("oklch(0.50 0.13 168)");
     expect(landing).toContain("210210260");
     expect(landing).toContain("21 021 0260");
     expect(landing).toContain("+351 21 021 0260");
@@ -146,7 +148,9 @@ describe("clinic marketing demo", () => {
     const app = readWeb("pages/Backoffice.tsx");
     expect(app).toContain("ChatGPT Live (gpt-live-1)");
     expect(app).toContain("SelectTrigger");
+    expect(app).toContain("Pendente de Aprovação Regulatória");
     expect(app).not.toMatch(/<select/);
     expect(app).not.toMatch(/Grok|Sofia/);
+    expect(app).not.toContain("Estamos a preparar a sua conta");
   });
 });

@@ -1,0 +1,13 @@
+export const INK = "#0e1a24";
+export const BODY = "#47586a";
+export const MUTED = "#5a6b7b";
+export const SURFACE = "#f6f8fa";
+export const LINE = "#e4eaf0";
+export const ACCENT = "oklch(0.50 0.13 168)";
+export const ACCENT_BRIGHT = "oklch(0.58 0.14 168)";
+export const ACCENT_DARK = "oklch(0.42 0.11 168)";
+export const ACCENT_SOFT = "oklch(0.95 0.035 168)";
+export const PANEL = "linear-gradient(170deg,#132330 0%,#0c151e 70%)";
+export const SANS = "'Public Sans',system-ui,sans-serif";
+export const DISPLAY = "Manrope,sans-serif";
+export const MONO = "'JetBrains Mono',monospace";
