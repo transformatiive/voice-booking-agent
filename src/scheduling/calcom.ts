@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Booking, Business, Service } from "../domain/types.js";
+import { pickResourceForService } from "../domain/assignment.js";
 import type { Store } from "../store/store.js";
 import type { BookInput, BookResult, Scheduler, Slot } from "./scheduler.js";
 import { InMemoryScheduler } from "./inMemoryScheduler.js";
@@ -117,7 +118,7 @@ export class CalComScheduler implements Scheduler {
         businessId: input.business.id,
         serviceId: input.service.id,
         serviceName: input.service.name,
-        resourceId: input.resourceId,
+        resourceId: input.resourceId ?? pickResourceForService(input.business, input.service.id)?.id ?? "",
         customerName: input.customerName,
         customerPhone: input.customerPhone,
         start: input.start.toISOString(),

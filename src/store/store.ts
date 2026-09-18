@@ -3,15 +3,22 @@ import type {
   AgentGender,
   Booking,
   Business,
+  Call,
   Locale,
   NumberPreference,
   PlanId,
+  Resource,
   UseCase,
 } from "../domain/types.js";
 import { defaultHours, defaultServices } from "../domain/catalog.js";
+import { defaultAgentKnowledge, defaultAgentScript } from "../domain/agentScript.js";
+import { defaultResourceRole } from "../domain/assignment.js";
 import { getPlan } from "../domain/plans.js";
+import { ensureUsagePeriod } from "../billing/usage.js";
+import { DEMO_DID_E164 } from "../telephony/demoDid.js";
 import type { Db, Persistence } from "./persistence.js";
 import { emptyDb } from "./persistence.js";
+import { MARKETING_DEMO_SLUG } from "./seed.js";
 
 export interface CreateBusinessInput {
   name: string;
@@ -63,6 +70,9 @@ export class Store {
 
   /** Backfill fields added after some rows were persisted (forward-compat). */
   private normalize(): void {
+    if (!this.db.calls) {
+      this.db.calls = [];
+    }
     for (const b of this.db.businesses) {
       // Rows created before the account-status feature were already operational,
       // so treat any missing/invalid status as active.
@@ -77,6 +87,47 @@ export class Store {
       }
       if (b.contactPhone === undefined) {
         b.contactPhone = null;
+      }
+      const serviceIds = b.services.map((s) => s.id);
+      b.resources = b.resources.map((resource) => normalizeResource(resource, serviceIds));
+      if (!b.subscription.planStartedAt) {
+        b.subscription.planStartedAt = b.createdAt;
+      }
+      if (b.subscription.overageMinutes == null) {
+        b.subscription.overageMinutes = 0;
+      }
+      if (!b.subscription.currentPeriodStart) {
+        b.subscription.currentPeriodStart = null;
+      }
+      ensureUsagePeriod(b.subscription);
+      if (!b.agentScript) {
+        b.agentScript = defaultAgentScript({
+          name: b.name,
+          useCase: b.useCase,
+          locale: b.locale,
+          agentName: b.agentName,
+        });
+      }
+      if (b.agentKnowledge == null) {
+        b.agentKnowledge = defaultAgentKnowledge(b);
+      }
+      if (b.slug === MARKETING_DEMO_SLUG) {
+        b.number = {
+          e164: DEMO_DID_E164,
+          provider: "telnyx",
+          type: "geographic",
+          status: "active",
+          monthlyCostCents: b.number?.monthlyCostCents ?? 0,
+        };
+      }
+    }
+    const fallbackResource = (businessId: string): string => {
+      const business = this.db.businesses.find((row) => row.id === businessId);
+      return business?.resources[0]?.id ?? "";
+    };
+    for (const booking of this.db.bookings) {
+      if (!booking.resourceId) {
+        booking.resourceId = fallbackResource(booking.businessId);
       }
     }
   }
@@ -117,6 +168,18 @@ export class Store {
 
   createBusiness(input: CreateBusinessInput): Business {
     const plan = getPlan(input.planId);
+    const createdAt = new Date().toISOString();
+    const services = defaultServices(input.useCase);
+    const resource: Resource = {
+      id: randomUUID(),
+      name: "Recurso 1",
+      role: defaultResourceRole(),
+      serviceIds: services.map((service) => service.id),
+      hours: null,
+      transferNumber: null,
+      available: true,
+      calUserId: null,
+    };
     const business: Business = {
       id: randomUUID(),
       slug: this.uniqueSlug(slugify(input.name)),
@@ -131,10 +194,8 @@ export class Store {
       contactPhone: input.contactPhone ?? null,
       numberPreference: input.numberPreference ?? "new",
       hours: defaultHours(),
-      services: defaultServices(input.useCase),
-      resources: [
-        { id: randomUUID(), name: "Recurso 1", transferNumber: null, available: true, calUserId: null },
-      ],
+      services,
+      resources: [resource],
       number: null,
       subscription: {
         planId: plan.id,
@@ -143,11 +204,22 @@ export class Store {
         stripeSubscriptionId: null,
         includedMinutes: plan.includedMinutes,
         usedMinutes: 0,
+        overageMinutes: 0,
+        planStartedAt: createdAt,
+        currentPeriodStart: null,
         currentPeriodEnd: null,
       },
+      agentScript: defaultAgentScript({
+        name: input.name,
+        useCase: input.useCase,
+        locale: input.locale,
+        agentName: input.agentName,
+      }),
+      agentKnowledge: defaultAgentKnowledge({ name: input.name, services, locale: input.locale }),
       calApiKey: null,
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
+    ensureUsagePeriod(business.subscription, new Date(createdAt));
     this.db.businesses.push(business);
     this.persist();
     return business;
@@ -175,6 +247,17 @@ export class Store {
     return this.db.businesses.find((b) => b.subscription.stripeCustomerId === customerId);
   }
 
+  findBusinessByNumber(e164: string): Business | undefined {
+    const digits = e164.replace(/\D/g, "");
+    if (!digits) {
+      return undefined;
+    }
+    return this.db.businesses.find((b) => {
+      const number = b.number?.e164?.replace(/\D/g, "") ?? "";
+      return number !== "" && number === digits;
+    });
+  }
+
   // --- Bookings ---
 
   listBookings(businessId: string): Booking[] {
@@ -199,4 +282,54 @@ export class Store {
     this.persist();
     return true;
   }
+
+  updateBooking(businessId: string, bookingId: string, patch: Partial<Booking>): Booking | undefined {
+    const booking = this.db.bookings.find((b) => b.id === bookingId && b.businessId === businessId);
+    if (!booking) {
+      return undefined;
+    }
+    Object.assign(booking, patch, { id: booking.id, businessId: booking.businessId });
+    this.persist();
+    return booking;
+  }
+
+  // --- Calls ---
+
+  listCalls(businessId: string): Call[] {
+    return (this.db.calls ?? [])
+      .filter((call) => call.businessId === businessId)
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }
+
+  findCallByProviderId(businessId: string, providerCallId: string): Call | undefined {
+    return (this.db.calls ?? []).find(
+      (call) => call.businessId === businessId && call.providerCallId === providerCallId,
+    );
+  }
+
+  addCall(call: Call): void {
+    this.db.calls.push(call);
+    this.persist();
+  }
+
+  saveCall(call: Call): void {
+    const index = this.db.calls.findIndex((row) => row.id === call.id);
+    if (index >= 0) {
+      this.db.calls[index] = call;
+    } else {
+      this.db.calls.push(call);
+    }
+    this.persist();
+  }
+}
+
+function normalizeResource(resource: Resource, serviceIds: string[]): Resource {
+  const role = resource.role?.trim() ? resource.role : defaultResourceRole();
+  const assigned = Array.isArray(resource.serviceIds) ? resource.serviceIds : serviceIds;
+  return {
+    ...resource,
+    role,
+    serviceIds: assigned,
+    hours: resource.hours ?? null,
+  };
 }

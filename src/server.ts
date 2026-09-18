@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
@@ -8,12 +9,25 @@ import { config, featureFlags, resolvedTelephonyProvider } from "./config.js";
 import { sendOnboardConfirmEmail } from "./email/mailer.js";
 import { PLANS, PORTABILITY_SETUP_FEE_CENTS } from "./domain/plans.js";
 import { DEFAULT_AGENT_NAME } from "./domain/agent.js";
-import type { AgentGender, Business, PlanId, UseCase, WeeklyHours } from "./domain/types.js";
+import type { AgentGender, Business, PlanId, Resource, UseCase, WeeklyHours } from "./domain/types.js";
 import { Store } from "./store/store.js";
 import { createPersistence } from "./store/persistence.js";
 import { createScheduler } from "./scheduling/index.js";
 import { ConversationManager, greeting } from "./agent/conversation.js";
 import { BillingService } from "./billing/stripe.js";
+import { ensureUsagePeriod } from "./billing/usage.js";
+import { assignResourcesToService, defaultResourceRole } from "./domain/assignment.js";
+import { rewriteAgentScript } from "./domain/rewriteScript.js";
+import { completeInboundCall, parseVoiceCallFields, startInboundCall } from "./telephony/callLog.js";
+import {
+  demoDidUsageBusiness,
+  demoDidUsageView,
+  ingestTelnyxWebhook,
+  overlaySharedNumber,
+  overlaySharedUsage,
+  syncDemoDidUsage,
+  usesSharedDemoDid,
+} from "./telephony/telnyxCdr.js";
 import { TelephonyService } from "./telephony/index.js";
 import { buildIncomingTeXML, handleDemoInbound, handleDemoPickerFunction, handleVoiceFunction } from "./telephony/voice.js";
 import {
@@ -69,6 +83,15 @@ app.post("/webhooks/stripe", express.raw({ type: "application/json" }), async (r
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.post("/webhooks/telnyx", async (req, res) => {
+  try {
+    const result = await ingestTelnyxWebhook(store, billing, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "webhook_error" });
+  }
+});
 
 // ---- Public info ----
 
@@ -207,21 +230,44 @@ function publicBusiness(business: Business) {
   };
 }
 
-app.get("/api/business/:slug", (req, res) => {
+app.get("/api/business/:slug", async (req, res) => {
   const business = requireBusiness(req, res);
   if (!business) return;
+  try {
+    await syncDemoDidUsage(store, billing);
+  } catch (err) {
+    console.error("[telnyx-cdr] sync failed:", err instanceof Error ? err.message : err);
+  }
+  const owner = demoDidUsageBusiness(store, business);
+  const before = business.subscription.currentPeriodStart;
+  ensureUsagePeriod(business.subscription);
+  if (owner.id !== business.id) {
+    ensureUsagePeriod(owner.subscription);
+  }
+  if (business.subscription.currentPeriodStart !== before) {
+    store.saveBusiness(business);
+  }
+  const shared = usesSharedDemoDid(business);
+  const subscription = shared ? overlaySharedUsage(business, owner) : business.subscription;
+  const number = shared ? overlaySharedNumber(business) : business.number;
+  const usage = demoDidUsageView(business);
   res.json({
-    business: publicBusiness(business),
+    business: publicBusiness({ ...business, subscription, number }),
     bookings: store.listBookings(business.id),
+    calls: store.listCalls(owner.id),
     features: featureFlags(),
     telephonyProvider: telephony.providerName,
+    usageSource: shared
+      ? { kind: "telnyx_demo_did", e164: usage.e164, display: usage.display, nsn: DEMO_DID_NSN }
+      : { kind: "tenant", e164: business.number?.e164 ?? null, display: business.number?.e164 ?? null },
   });
 });
 
 app.put("/api/business/:slug", (req, res) => {
   const business = requireBusiness(req, res);
   if (!business) return;
-  const { agentName, agentGender, locale, hours, services, resources, calApiKey } = req.body ?? {};
+  const { agentName, agentGender, locale, hours, services, resources, calApiKey, agentScript, agentKnowledge } =
+    req.body ?? {};
   if (typeof agentName === "string") business.agentName = agentName;
   if (isGender(agentGender)) business.agentGender = agentGender;
   if (locale === "pt" || locale === "en") business.locale = locale;
@@ -229,6 +275,8 @@ app.put("/api/business/:slug", (req, res) => {
   if (Array.isArray(services)) business.services = services;
   if (Array.isArray(resources)) business.resources = resources;
   if (typeof calApiKey === "string") business.calApiKey = calApiKey.trim() || null;
+  if (typeof agentScript === "string") business.agentScript = agentScript;
+  if (typeof agentKnowledge === "string") business.agentKnowledge = agentKnowledge;
   store.saveBusiness(business);
   res.json({ business: publicBusiness(business) });
 });
@@ -244,6 +292,196 @@ app.post("/api/business/:slug/resource/:rid/toggle", (req, res) => {
   resource.available = !resource.available;
   store.saveBusiness(business);
   res.json({ resource });
+});
+
+app.post("/api/business/:slug/resources", (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!name) {
+    res.status(400).json({ error: "name_required" });
+    return;
+  }
+  const resource: Resource = {
+    id: randomUUID(),
+    name,
+    role: typeof req.body?.role === "string" && req.body.role.trim() ? req.body.role.trim() : defaultResourceRole(),
+    serviceIds: Array.isArray(req.body?.serviceIds)
+      ? req.body.serviceIds.filter((id: unknown) => typeof id === "string")
+      : [],
+    hours: Array.isArray(req.body?.hours) && req.body.hours.length === 7 ? req.body.hours : null,
+    transferNumber: typeof req.body?.transferNumber === "string" ? req.body.transferNumber.trim() || null : null,
+    available: req.body?.available !== false,
+    calUserId: null,
+  };
+  business.resources.push(resource);
+  store.saveBusiness(business);
+  res.json({ resource });
+});
+
+app.put("/api/business/:slug/resources/:rid", (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const resource = business.resources.find((row) => row.id === req.params.rid);
+  if (!resource) {
+    res.status(404).json({ error: "resource_not_found" });
+    return;
+  }
+  if (typeof req.body?.name === "string" && req.body.name.trim()) resource.name = req.body.name.trim();
+  if (typeof req.body?.role === "string") resource.role = req.body.role.trim() || defaultResourceRole();
+  if (Array.isArray(req.body?.serviceIds)) {
+    resource.serviceIds = req.body.serviceIds.filter((id: unknown) => typeof id === "string");
+  }
+  if (req.body?.hours === null) resource.hours = null;
+  else if (Array.isArray(req.body?.hours) && req.body.hours.length === 7) resource.hours = req.body.hours;
+  if (typeof req.body?.transferNumber === "string") resource.transferNumber = req.body.transferNumber.trim() || null;
+  if (typeof req.body?.available === "boolean") resource.available = req.body.available;
+  store.saveBusiness(business);
+  res.json({ resource });
+});
+
+app.post("/api/business/:slug/services", (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!name) {
+    res.status(400).json({ error: "name_required" });
+    return;
+  }
+  const durationMinutes = Number(req.body?.durationMinutes);
+  const service = {
+    id: randomUUID(),
+    name,
+    durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0 ? durationMinutes : 30,
+    priceCents:
+      req.body?.priceCents == null || req.body.priceCents === ""
+        ? null
+        : Math.round(Number(req.body.priceCents)),
+    calEventTypeId: null,
+  };
+  business.services.push(service);
+  if (Array.isArray(req.body?.resourceIds)) {
+    business.resources = assignResourcesToService(
+      business.resources,
+      service.id,
+      req.body.resourceIds.filter((id: unknown) => typeof id === "string"),
+    );
+  }
+  store.saveBusiness(business);
+  res.json({ service, resources: business.resources });
+});
+
+app.put("/api/business/:slug/services/:sid", (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const service = business.services.find((row) => row.id === req.params.sid);
+  if (!service) {
+    res.status(404).json({ error: "service_not_found" });
+    return;
+  }
+  if (typeof req.body?.name === "string" && req.body.name.trim()) service.name = req.body.name.trim();
+  if (req.body?.durationMinutes != null) {
+    const durationMinutes = Number(req.body.durationMinutes);
+    if (Number.isFinite(durationMinutes) && durationMinutes > 0) service.durationMinutes = durationMinutes;
+  }
+  if (req.body?.priceCents !== undefined) {
+    service.priceCents =
+      req.body.priceCents == null || req.body.priceCents === ""
+        ? null
+        : Math.round(Number(req.body.priceCents));
+  }
+  if (Array.isArray(req.body?.resourceIds)) {
+    business.resources = assignResourcesToService(
+      business.resources,
+      service.id,
+      req.body.resourceIds.filter((id: unknown) => typeof id === "string"),
+    );
+  }
+  store.saveBusiness(business);
+  res.json({ service, resources: business.resources });
+});
+
+app.delete("/api/business/:slug/services/:sid", (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const index = business.services.findIndex((row) => row.id === req.params.sid);
+  if (index === -1) {
+    res.status(404).json({ error: "service_not_found" });
+    return;
+  }
+  const [removed] = business.services.splice(index, 1);
+  business.resources = business.resources.map((resource) => ({
+    ...resource,
+    serviceIds: resource.serviceIds.filter((id) => id !== removed.id),
+  }));
+  store.saveBusiness(business);
+  res.json({ ok: true, resources: business.resources });
+});
+
+app.delete("/api/business/:slug/resources/:rid", (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  if (business.resources.length <= 1) {
+    res.status(409).json({ error: "last_resource" });
+    return;
+  }
+  const index = business.resources.findIndex((row) => row.id === req.params.rid);
+  if (index === -1) {
+    res.status(404).json({ error: "resource_not_found" });
+    return;
+  }
+  business.resources.splice(index, 1);
+  store.saveBusiness(business);
+  res.json({ ok: true });
+});
+
+app.post("/api/business/:slug/bookings", async (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const service = business.services.find((row) => row.id === req.body?.serviceId);
+  if (!service) {
+    res.status(400).json({ error: "service_required" });
+    return;
+  }
+  const start = new Date(String(req.body?.start ?? ""));
+  const result = await scheduler.book({
+    business,
+    service,
+    start,
+    resourceId: typeof req.body?.resourceId === "string" ? req.body.resourceId : null,
+    customerName: typeof req.body?.customerName === "string" ? req.body.customerName.trim() || null : null,
+    customerPhone: typeof req.body?.customerPhone === "string" ? req.body.customerPhone.trim() || null : null,
+    source: "backoffice",
+  });
+  if (!result.ok) {
+    res.status(409).json(result);
+    return;
+  }
+  res.json({ booking: result.booking });
+});
+
+app.put("/api/business/:slug/bookings/:id", (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const patch: Record<string, unknown> = {};
+  if (typeof req.body?.resourceId === "string") patch.resourceId = req.body.resourceId;
+  if (typeof req.body?.customerName === "string") patch.customerName = req.body.customerName.trim() || null;
+  if (typeof req.body?.customerPhone === "string") patch.customerPhone = req.body.customerPhone.trim() || null;
+  const booking = store.updateBooking(business.id, req.params.id, patch);
+  if (!booking) {
+    res.status(404).json({ error: "booking_not_found" });
+    return;
+  }
+  res.json({ booking });
+});
+
+app.post("/api/business/:slug/assistant/rewrite", async (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const draft = typeof req.body?.script === "string" ? req.body.script : business.agentScript;
+  const knowledge = typeof req.body?.knowledge === "string" ? req.body.knowledge : business.agentKnowledge;
+  const result = await rewriteAgentScript({ draft, knowledge, locale: business.locale });
+  res.json(result);
 });
 
 app.post("/api/business/:slug/number", async (req, res) => {
@@ -264,7 +502,7 @@ app.post("/api/business/:slug/checkout", async (req, res) => {
   const business = requireBusiness(req, res);
   if (!business) return;
   const planId: PlanId = isPlan(req.body?.planId) ? req.body.planId : business.subscription.planId;
-  const result = await billing.createCheckoutSession(business, planId);
+  const result = await billing.changePlan(business, planId);
   res.json(result);
 });
 
@@ -272,6 +510,13 @@ app.post("/api/business/:slug/portal", async (req, res) => {
   const business = requireBusiness(req, res);
   if (!business) return;
   const result = await billing.createPortalSession(business);
+  res.json(result);
+});
+
+app.post("/api/business/:slug/billing/cancel", async (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const result = await billing.cancelSubscription(business);
   res.json(result);
 });
 
@@ -408,26 +653,50 @@ app.get(LIVE_MEDIA_PATH, (_req, res) => {
 });
 
 app.post("/voice/incoming", (req, res) => {
-  const to = String(req.body?.To ?? req.body?.to ?? "");
+  const fields = parseVoiceCallFields(req.body);
+  const to = fields.toE164 ?? String(req.body?.To ?? req.body?.to ?? "");
   if (isDemoDid(to) || to === config.demoDidE164) {
     res.type("text/xml").send(demoInboundXml(req));
     return;
   }
-  res.status(404).type("text/xml").send('<?xml version="1.0"?><Response/>');
-});
-
-app.post("/voice/incoming/:slug", (req, res) => {
-  const to = String(req.body?.To ?? req.body?.to ?? "");
-  if (isDemoDid(to) || req.params.slug === "demo") {
-    res.type("text/xml").send(demoInboundXml(req));
-    return;
-  }
-  const business = store.getBusinessBySlug(req.params.slug);
+  const business = store.findBusinessByNumber(to);
   if (!business) {
     res.status(404).type("text/xml").send('<?xml version="1.0"?><Response/>');
     return;
   }
-  res.type("text/xml").send(buildIncomingTeXML(business));
+  void startInboundCall(store, business, fields);
+  res.type("text/xml").send(buildIncomingTeXML(business, config.publicBaseUrl));
+});
+
+app.post("/voice/incoming/:slug", (req, res) => {
+  const fields = parseVoiceCallFields(req.body);
+  const to = fields.toE164 ?? String(req.body?.To ?? req.body?.to ?? "");
+  if (isDemoDid(to) || req.params.slug === "demo") {
+    res.type("text/xml").send(demoInboundXml(req));
+    return;
+  }
+  const business = store.getBusinessBySlug(req.params.slug) ?? store.findBusinessByNumber(to);
+  if (!business) {
+    res.status(404).type("text/xml").send('<?xml version="1.0"?><Response/>');
+    return;
+  }
+  void startInboundCall(store, business, {
+    ...fields,
+    toE164: fields.toE164 ?? (to || business.number?.e164 || undefined),
+  });
+  res.type("text/xml").send(buildIncomingTeXML(business, config.publicBaseUrl));
+});
+
+app.post(["/voice/status", "/voice/status/:slug"], (req, res) => {
+  const fields = parseVoiceCallFields(req.body);
+  const to = fields.toE164 ?? "";
+  const business =
+    (req.params.slug ? store.getBusinessBySlug(req.params.slug) : undefined) ??
+    (to ? store.findBusinessByNumber(to) : undefined);
+  if (business && !isDemoDid(to)) {
+    void completeInboundCall(store, billing, business, fields);
+  }
+  res.type("text/xml").send('<?xml version="1.0"?><Response/>');
 });
 
 app.post("/voice/functions/:slug", async (req, res) => {
@@ -586,6 +855,9 @@ async function main(): Promise<void> {
     console.log(
       `persistence=${persistence.kind}, features=${JSON.stringify(featureFlags())}, telephony=${resolvedTelephonyProvider()}`,
     );
+    void syncDemoDidUsage(store, billing).catch((err: unknown) => {
+      console.error("[telnyx-cdr] startup sync failed:", err instanceof Error ? err.message : err);
+    });
   });
 }
 

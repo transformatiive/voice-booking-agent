@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import pgPkg from "pg";
 import { config } from "../config.js";
-import type { Booking, Business } from "../domain/types.js";
+import type { Booking, Business, Call } from "../domain/types.js";
 
 const { Pool } = pgPkg;
 type PgPool = InstanceType<typeof Pool>;
@@ -10,10 +10,11 @@ type PgPool = InstanceType<typeof Pool>;
 export interface Db {
   businesses: Business[];
   bookings: Booking[];
+  calls: Call[];
 }
 
 export function emptyDb(): Db {
-  return { businesses: [], bookings: [] };
+  return { businesses: [], bookings: [], calls: [] };
 }
 
 /**
@@ -48,7 +49,7 @@ export class FilePersistence implements Persistence {
     }
     try {
       const parsed = JSON.parse(readFileSync(this.file, "utf8")) as Partial<Db>;
-      return { businesses: parsed.businesses ?? [], bookings: parsed.bookings ?? [] };
+      return { businesses: parsed.businesses ?? [], bookings: parsed.bookings ?? [], calls: parsed.calls ?? [] };
     } catch {
       return null;
     }
@@ -93,17 +94,26 @@ export class PostgresPersistence implements Persistence {
         data JSONB NOT NULL
       );
     `);
-    await this.pool.query(`CREATE INDEX IF NOT EXISTS bookings_business_idx ON bookings (business_id);`);
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS calls (
+        id TEXT PRIMARY KEY,
+        business_id TEXT NOT NULL,
+        data JSONB NOT NULL
+      );
+    `);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS calls_business_idx ON calls (business_id);`);
   }
 
   async load(): Promise<Db> {
-    const [businesses, bookings] = await Promise.all([
+    const [businesses, bookings, calls] = await Promise.all([
       this.pool.query<{ data: Business }>("SELECT data FROM businesses"),
       this.pool.query<{ data: Booking }>("SELECT data FROM bookings"),
+      this.pool.query<{ data: Call }>("SELECT data FROM calls"),
     ]);
     return {
       businesses: businesses.rows.map((r) => r.data),
       bookings: bookings.rows.map((r) => r.data),
+      calls: calls.rows.map((r) => r.data),
     };
   }
 
@@ -113,11 +123,15 @@ export class PostgresPersistence implements Persistence {
       await client.query("BEGIN");
       await client.query("DELETE FROM businesses");
       await client.query("DELETE FROM bookings");
+      await client.query("DELETE FROM calls");
       for (const b of db.businesses) {
         await client.query("INSERT INTO businesses (id, slug, data) VALUES ($1, $2, $3)", [b.id, b.slug, b]);
       }
       for (const bk of db.bookings) {
         await client.query("INSERT INTO bookings (id, business_id, data) VALUES ($1, $2, $3)", [bk.id, bk.businessId, bk]);
+      }
+      for (const call of db.calls ?? []) {
+        await client.query("INSERT INTO calls (id, business_id, data) VALUES ($1, $2, $3)", [call.id, call.businessId, call]);
       }
       await client.query("COMMIT");
     } catch (err) {

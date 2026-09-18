@@ -22,7 +22,7 @@ describe("availability", () => {
   it("accepts a valid future slot within hours", () => {
     const { business, service } = makeBusiness();
     const start = new Date(2026, 7, 27, 15, 0, 0); // Thu 15:00
-    expect(checkAvailability(business, service, start, [], NOW)).toEqual({ ok: true });
+    expect(checkAvailability(business, service, start, [], NOW).ok).toBe(true);
   });
 
   it("rejects past, closed Sunday, and out-of-hours", () => {

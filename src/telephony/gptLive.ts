@@ -198,27 +198,35 @@ export function buildLiveInstructions(
     .join("; ");
   const hours = formatHoursSummary(business.hours, business.locale);
   const bookingRules = bookingLiveRules(business, booking);
+  const ownerScript = business.agentScript?.trim();
+  const knowledge = business.agentKnowledge?.trim();
 
   if (business.locale === "en") {
     return [
-      `You are ${agent}, the appointment voice agent for ${business.name}.`,
+      ownerScript || `You are ${agent}, the appointment voice agent for ${business.name}.`,
       "Speak English. Keep replies short, like a phone call — one or two sentences.",
       `Timezone: ${business.timezone}. Hours: ${hours}. Services: ${services}.`,
+      knowledge ? `Company knowledge (text): ${knowledge}` : "",
       ...verticalLiveRules(business, booking),
       ...bookingRules,
       "Do not introduce yourself as a product demo. You are the live receptionist for this business.",
-    ].join(" ");
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   return [
-    `És o ${agent}, assistente de voz de marcações da ${business.name}.`,
+    ownerScript || `És o ${agent}, assistente de voz de marcações da ${business.name}.`,
     "Fala sempre português de Portugal (não brasileiro): usa «marcação», «telemóvel», «consulta», evita sotaque e vocabulário do Brasil (celular, vocês aí, a gente, horáriozinho).",
     "Respostas curtas, estilo chamada telefónica — uma ou duas frases.",
     `Fuso: ${business.timezone}. Horário: ${hours}. Serviços: ${services}.`,
+    knowledge ? `Conhecimento da empresa (texto): ${knowledge}` : "",
     ...verticalLiveRules(business, booking),
     ...bookingRules,
     "Não te apresentes como uma demo de produto. És a recepção ao vivo deste negócio.",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function bookingLiveRules(business: Business, booking: LiveBookingMode): string[] {

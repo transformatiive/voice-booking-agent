@@ -4,6 +4,7 @@ import type { Store } from "../store/store.js";
 import type { Scheduler } from "../scheduling/scheduler.js";
 import { checkAvailability, suggestSlots } from "../scheduling/availability.js";
 import type { Unavailable } from "../scheduling/availability.js";
+import { pickResourceForService } from "../domain/assignment.js";
 import { parseMessage } from "./nlu.js";
 
 interface SessionState {
@@ -263,6 +264,13 @@ export class ConversationManager {
               ? `Essa hora já está ocupada.${suggestionText || " Tente outra hora."}`
               : `That slot is already booked.${suggestionText || " Try another time."}`,
         };
+      case "no_resource":
+        return {
+          reply:
+            L === "pt"
+              ? "Não há ninguém disponível para esse serviço nesse horário. Quer outra hora?"
+              : "No one is available for that service at that time. Another time?",
+        };
       default: {
         const exhaustive: never = reason;
         throw new Error(`Unhandled reason: ${String(exhaustive)}`);
@@ -286,7 +294,7 @@ export class ConversationManager {
       business,
       service,
       start: state.start,
-      resourceId: firstAvailableResource(business),
+      resourceId: pickResourceForService(business, service.id)?.id ?? null,
       customerName: state.customerName,
       customerPhone: state.customerPhone,
       source,
@@ -385,11 +393,6 @@ export class ConversationManager {
     }
     return "default";
   }
-}
-
-function firstAvailableResource(business: Business): string | null {
-  const available = business.resources.find((r) => r.available);
-  return (available ?? business.resources[0])?.id ?? null;
 }
 
 export function greeting(business: Business): string {

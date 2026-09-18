@@ -11,6 +11,7 @@ import {
 } from "../scheduling/voiceSlots.js";
 import { isVoiceDemoSlug } from "../store/seed.js";
 import { DEFAULT_AGENT_NAME } from "../domain/agent.js";
+import { pickResourceForService } from "../domain/assignment.js";
 import {
   demoSlugForUseCase,
   demoStreamUrl,
@@ -32,10 +33,6 @@ function escapeXml(value: string): string {
 }
 
 const VOICE_LANG: Record<string, string> = { pt: "pt-PT", en: "en-US" };
-
-function firstResourceId(business: Business): string | null {
-  return business.resources.find((r) => r.available)?.id ?? business.resources[0]?.id ?? null;
-}
 
 function memoryScheduler(store: Store, scheduler: Scheduler, now: Date): Scheduler {
   if (scheduler.kind === "memory") {
@@ -130,7 +127,7 @@ export function handleDemoInbound(opts: {
  * otherwise the AI assistant greets and (in production) takes the booking.
  * Demo DID inbound must not use this path — use buildDemoLiveTeXML.
  */
-export function buildIncomingTeXML(business: Business): string {
+export function buildIncomingTeXML(business: Business, publicBaseUrl?: string): string {
   const lang = VOICE_LANG[business.locale] ?? "pt-PT";
   const available = business.resources.find((r) => r.available && r.transferNumber);
 
@@ -140,11 +137,14 @@ export function buildIncomingTeXML(business: Business): string {
       : `Hello, welcome to ${business.name}. One moment please.`;
 
   if (available && available.transferNumber) {
+    const action = publicBaseUrl
+      ? ` action="${escapeXml(absolutePublicUrl(publicBaseUrl, `/voice/status/${business.slug}`))}"`
+      : "";
     return [
       `<?xml version="1.0" encoding="UTF-8"?>`,
       `<Response>`,
       `  <Say language="${lang}">${escapeXml(greeting)}</Say>`,
-      `  <Dial timeout="20">${escapeXml(available.transferNumber)}</Dial>`,
+      `  <Dial timeout="20"${action}>${escapeXml(available.transferNumber)}</Dial>`,
       `</Response>`,
     ].join("\n");
   }
@@ -250,7 +250,7 @@ export async function handleVoiceFunction(
         business,
         service,
         start,
-        resourceId: firstResourceId(business),
+        resourceId: pickResourceForService(business, service.id)?.id ?? null,
         customerName,
         customerPhone,
         source: "voice" as const,

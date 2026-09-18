@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { DEFAULT_AGENT_NAME } from "../domain/agent.js";
+import { defaultResourceRole } from "../domain/assignment.js";
 import type { UseCase, WeeklyHours } from "../domain/types.js";
 import type { Store } from "./store.js";
-import { listDemoOptions } from "../telephony/demoDid.js";
+import { DEMO_DID_E164, listDemoOptions } from "../telephony/demoDid.js";
 
 /** Marketing homepage live-call tenant (multi-specialty clinic, PT). */
 export const MARKETING_DEMO_SLUG = "clinica-central";
@@ -104,10 +105,14 @@ function ensureDemo(
   if (seed.hours) {
     demo.hours = seed.hours;
   }
+  const serviceIds = demo.services.map((service) => service.id);
   demo.resources = [
     {
       id: demo.resources[0].id,
       name: seed.resourceName,
+      role: defaultResourceRole(),
+      serviceIds,
+      hours: null,
       transferNumber: "+351910000001",
       available: true,
       calUserId: null,
@@ -115,18 +120,30 @@ function ensureDemo(
     ...(seed.extraResources ?? []).map((resource) => ({
       id: randomUUID(),
       name: resource.name,
+      role: defaultResourceRole(),
+      serviceIds,
+      hours: null,
       transferNumber: resource.transferNumber,
       available: resource.available,
       calUserId: null,
     })),
   ];
-  demo.number = {
-    e164: "+351921000001",
-    provider: "mock",
-    type: "mobile",
-    status: "active",
-    monthlyCostCents: 900,
-  };
+  demo.number =
+    seed.slug === MARKETING_DEMO_SLUG
+      ? {
+          e164: DEMO_DID_E164,
+          provider: "telnyx",
+          type: "geographic",
+          status: "active",
+          monthlyCostCents: 0,
+        }
+      : {
+          e164: "+351921000001",
+          provider: "mock",
+          type: "mobile",
+          status: "active",
+          monthlyCostCents: 900,
+        };
   demo.subscription.status = "trialing";
   store.saveBusiness(demo);
 }
