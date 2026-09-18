@@ -13,13 +13,16 @@ warm-transfers to the right person when needed. Beachhead: **barbearias / salõe
 - **PT-first landing page** with barber/clinic positioning and pricing.
 - **Thin backoffice** (not a full PMS): onboarding, resources (barbers),
   services/durations/prices, opening hours, Cal.com connect, number provisioning,
-  billing, and the **Disponível / A cortar** warm-transfer toggle.
+  billing, and the **Disponível / A cortar** warm-transfer toggle. **Agenda** can
+  connect a person's Google Calendar (OAuth) and sync it with the backoffice calendar.
 - **Conversational agent** (PT/EN) that understands natural language
   (_"marcar corte + barba quinta às 16h"_), fills missing details, checks
   availability and books — available as a **web/voice demo** and via a
   **voice-orchestrator function webhook** (Grok Live 2 / Retell / Vapi).
-- **Cal.com** as the scheduling brain, with **Google Calendar** sync configured
-  inside Cal.com (the barber's backoffice is the Google Calendar app on their phone).
+- **Cal.com** remains an optional scheduling brain. **Google Calendar** can also
+  be connected directly from Agenda onto a person/account (email + OAuth tokens
+  persisted in Postgres). There is **no username/password login** in v1: onboard
+  stores business + contact email; Entrar is slug-only.
 - **Telnyx (primary) / Zadarma (fallback)** number provisioning, plus inbound-call
   **TeXML** and warm transfer.
 - **Stripe subscriptions** where the plan price **includes the monthly DID cost**
@@ -87,7 +90,10 @@ Copy `.env.example` and fill only the integrations you want to activate.
 | POST | `/api/business/:slug/message` | Talk to the agent (text NLU fallback) |
 | POST | `/api/business/:slug/realtime/session` | Mint a Grok Live 2 ephemeral token for the demo |
 | POST | `/api/business/:slug/realtime/tool` | Execute a Grok function tool against the business |
-| POST | `/api/business/:slug/checkout` \| `/portal` | Stripe checkout / portal |
+| GET | `/api/business/:slug/google/connect` | Start Google OAuth (returns `{ url }`) |
+| GET | `/api/google/oauth/callback` | Google OAuth redirect; tokens saved on the person |
+| POST | `/api/business/:slug/google/sync` | Pull Google events + push local bookings |
+| POST | `/api/business/:slug/google/disconnect` | Drop Google tokens for that person |
 | POST | `/voice/incoming` | Demo DID inbound TeXML (`Connect/Stream` or `Dial Sip`) |
 | POST | `/voice/incoming/:slug` | Inbound-call TeXML |
 | WS | `/voice/live-media` | Telnyx TeXML Stream ↔ gpt-live-1 media bridge |
@@ -132,9 +138,12 @@ WebSocket-upgrade the path.
 
 - **Postgres (recommended, production):** add the Railway **Postgres** plugin and
   the service picks up `DATABASE_URL` automatically. On boot the app creates its
-  tables (`businesses`, `bookings`) and loads/saves there. Set `DATABASE_SSL=true`
-  if you use Postgres' public proxy URL (the internal `*.railway.internal` URL
-  does not need it).
+  tables (`businesses`, `bookings`, `accounts`, `oauth_states`) and loads/saves
+  there. Set `DATABASE_SSL=true` if you use Postgres' public proxy URL (the
+  internal `*.railway.internal` URL does not need it).
+  `accounts` holds the person under a business (onboard `contactEmail`, Google
+  OAuth access/refresh tokens, calendar sync state). `oauth_states` holds the
+  Google OAuth CSRF state so it is not memory-only.
 - **JSON file (dev/demo only):** with no `DATABASE_URL`, data is stored in
   `DATA_DIR/db.json`. On Railway the container filesystem is ephemeral, so mount a
   **Volume** at `/data` (the Dockerfile sets `DATA_DIR=/data`) to persist it.
@@ -142,10 +151,19 @@ WebSocket-upgrade the path.
 The store keeps data in memory for fast synchronous reads and persists through the
 selected backend (`src/store/persistence.ts`).
 
+### Auth (intentionally not a login product)
+
+There is **still no password login**. Onboard persists business fields
+(`contactEmail`, `contactPhone`, hours, services, …) plus a **person/account**
+row under that business. Entrar is **slug-only**. Google Calendar OAuth attaches
+to that person (email + tokens + sync state). Do not expect a username/password
+screen in this version.
+
 ## Status / next steps
 
 - Live implementation is wired for Cal.com, Stripe and Telnyx and gated behind
   credentials; Zadarma number purchase is typically completed in its panel.
 - Production voice (PSTN) needs a provisioned DID + SIP pointed at the voice
   stack; the function webhook is ready for the orchestrator to call.
-- Auth/multi-tenant login for the backoffice is intentionally minimal in v1.
+- Auth/multi-tenant login for the backoffice is intentionally minimal in v1
+  (slug-only Entrar; person/account stores email + Google tokens, no password).

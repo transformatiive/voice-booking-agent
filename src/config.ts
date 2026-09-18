@@ -34,6 +34,20 @@ export const config = {
     calApiKey: env("CAL_API_KEY"),
   },
 
+  google: {
+    /** OAuth client for Agenda → Google Calendar connect. Getters so tests can stub env. */
+    get clientId() {
+      return env("GOOGLE_CLIENT_ID");
+    },
+    get clientSecret() {
+      return env("GOOGLE_CLIENT_SECRET");
+    },
+    /** Defaults to `${PUBLIC_BASE_URL}/api/google/oauth/callback`. */
+    get redirectUri() {
+      return env("GOOGLE_REDIRECT_URI");
+    },
+  },
+
   billing: {
     stripeSecretKey: env("STRIPE_SECRET_KEY"),
     stripeWebhookSecret: env("STRIPE_WEBHOOK_SECRET"),
@@ -89,6 +103,7 @@ export function featureFlags() {
     zadarma: Boolean(config.telephony.zadarmaKey && config.telephony.zadarmaSecret),
     gptLive: Boolean(config.voice.openaiApiKey),
     demoActivate: env("DEMO_ACTIVATE") === "true",
+    googleCalendar: Boolean(config.google.clientId && config.google.clientSecret),
   };
 }
 
