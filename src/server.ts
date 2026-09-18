@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import express from "express";
 import type { Request, Response } from "express";
 import { config, featureFlags, resolvedTelephonyProvider } from "./config.js";
+import { sendOnboardConfirmEmail } from "./email/mailer.js";
 import { PLANS, PORTABILITY_SETUP_FEE_CENTS } from "./domain/plans.js";
 import { DEFAULT_AGENT_NAME } from "./domain/agent.js";
 import type { AgentGender, Business, PlanId, UseCase, WeeklyHours } from "./domain/types.js";
@@ -143,6 +144,15 @@ app.post("/api/onboard", (req: Request, res: Response) => {
     status: "pending",
   });
   res.json({ slug: business.slug, id: business.id });
+  void sendOnboardConfirmEmail({
+    businessId: business.id,
+    businessName: business.name,
+    agentName: business.agentName,
+    slug: business.slug,
+    to: business.contactEmail,
+  }).catch((err: unknown) => {
+    console.error("[mail] onboard confirmation threw:", err instanceof Error ? err.message : err);
+  });
 });
 
 app.post("/api/business/:slug/activate", async (req, res) => {
