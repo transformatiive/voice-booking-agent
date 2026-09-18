@@ -15,7 +15,7 @@ import {
   sessionConfigForLiveMedia,
   speakableToolSentence,
 } from "../src/telephony/liveMedia.js";
-import { LIVE_VOICE_MODEL, buildDemoPickerLiveSessionConfig } from "../src/telephony/gptLive.js";
+import { LIVE_VOICE_MODEL, buildDemoPickerLiveSessionConfig, demoSimulatedConfirmation } from "../src/telephony/gptLive.js";
 import { demoVerticalOpener, handleDemoPickerFunction } from "../src/telephony/voice.js";
 import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
 import { app } from "../src/server.js";
@@ -129,7 +129,7 @@ describe("live-media WebSocket route", () => {
     expect(telnyx.readyState).toBe(WebSocket.OPEN);
   });
 
-  it("bridges Telnyx PCMU media to gpt-live-1 picker session and tools", async () => {
+  it("bridges Telnyx PCMU media to gpt-live-1 picker session without booking tools", async () => {
     const appLocal = express();
     const server = createServer(appLocal);
     servers.push(server);
@@ -194,9 +194,10 @@ describe("live-media WebSocket route", () => {
     expect(start.session.instructions).toMatch(/Restaurante Baixa/);
     expect(start.session.instructions).toMatch(/Oficina Norte/);
     expect(start.session.instructions).toMatch(/Imobiliária Baixa/);
+    expect(start.session.delegation.responses.tools).toEqual([]);
     expect(start.session.delegation.responses.tools.map((t) => t.name)).not.toContain("select_demo_vertical");
-    expect(start.session.delegation.responses.tools.map((t) => t.name).sort()).toEqual(
-      ["book_appointment", "cancel_appointment", "get_slots", "list_bookings", "list_services"].sort(),
+    expect(start.session.delegation.responses.tools.map((t) => t.name)).not.toEqual(
+      expect.arrayContaining(["get_slots", "book_appointment", "list_bookings", "cancel_appointment"]),
     );
 
     openai.emitJson({ type: "session.started", session: { id: "live_demo" } });
@@ -225,62 +226,12 @@ describe("live-media WebSocket route", () => {
     );
     expect(openai.sent.slice(sentBeforeChoice)).toEqual([]);
     expect(openai.sent.some((e) => (e as { type?: string }).type === "response.item.create")).toBe(false);
-
-    openai.emitJson({
-      type: "response.event",
-      event: {
-        type: "response.output_item.done",
-        item: {
-          type: "function_call",
-          status: "completed",
-          call_id: "call_1",
-          name: "get_slots",
-          arguments: JSON.stringify({ service: "Revisão", vertical: "oficina" }),
-        },
-      },
-    });
-    await viWait(() => tools.length === 1);
-    expect(tools[0]).toEqual({ name: "get_slots", arguments: { service: "Revisão", vertical: "oficina" } });
-    await viWait(
-      () =>
-        openai.sent.some((e) => (e as { type?: string }).type === "response.item.create") &&
-        openai.sent.some((e) => (e as { type?: string }).type === "session.commentary.append" && (e as { event_id?: string }).event_id === "tool-speak-call_1") &&
-        openai.sent.some((e) => (e as { type?: string }).type === "response.create"),
-    );
-    const afterTool = openai.sent.filter((e) => {
-      const type = (e as { type?: string }).type;
-      const id = (e as { event_id?: string }).event_id ?? "";
-      return (
-        type === "response.item.create" ||
-        type === "response.create" ||
-        type === "session.instructions.append" ||
-        (type === "session.commentary.append" && id.startsWith("tool-speak-"))
-      );
-    });
-    expect(afterTool.map((e) => (e as { type: string }).type)).toEqual([
-      "response.item.create",
-      "session.commentary.append",
-      "response.create",
-    ]);
-    const toolOutput = openai.sent.find((e) => (e as { type?: string }).type === "response.item.create") as {
-      item: { type: string; call_id: string; output: string };
-    };
-    expect(toolOutput.item.type).toBe("function_call_output");
-    expect(toolOutput.item.call_id).toBe("call_1");
-    expect(JSON.parse(toolOutput.item.output)).toEqual(
-      expect.objectContaining({ ok: true, speak: "Olá, oficina." }),
-    );
-    const spoken = afterTool.find((e) => (e as { type?: string }).type === "session.commentary.append") as {
-      delegation_id: null;
-      content: string;
-    };
-    expect(spoken.delegation_id).toBeNull();
-    expect(spoken.content).toBe("Olá, oficina.");
+    expect(tools).toEqual([]);
     expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
     expect(openai.sent.some((e) => (e as { type?: string }).type === "session.instructions.append")).toBe(false);
   });
 
-  it("after the caller names a vertical, booking tools run on the same session", async () => {
+  it("after the caller names a vertical, no booking tool is sent", async () => {
     const appLocal = express();
     const server = createServer(appLocal);
     servers.push(server);
@@ -325,38 +276,7 @@ describe("live-media WebSocket route", () => {
     expect(openai.sent.slice(sentBeforeChoice).some((e) => (e as { type?: string }).type === "response.item.create")).toBe(
       false,
     );
-    expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
-
-    openai.emitJson({
-      type: "response.event",
-      event: {
-        type: "response.output_item.done",
-        item: {
-          type: "function_call",
-          status: "completed",
-          call_id: "call_slots",
-          name: "get_slots",
-          arguments: { service: "Revisão" },
-        },
-      },
-    });
-    await viWait(() => tools.some((t) => t.name === "get_slots"));
-    await viWait(() => openai.sent.some((e) => (e as { type?: string }).type === "response.create"));
-    const slotOutput = openai.sent.find((e) => {
-      if ((e as { type?: string }).type !== "response.item.create") return false;
-      const item = (e as { item?: { call_id?: string } }).item;
-      return item?.call_id === "call_slots";
-    }) as { item: { output: string } };
-    expect(JSON.parse(slotOutput.item.output)).toEqual(
-      expect.objectContaining({ ok: true, slots: ["2026-08-27T10:00:00.000Z"], message: "Tenho vaga às 10h." }),
-    );
-    const spoken = openai.sent.find(
-      (e) =>
-        (e as { type?: string }).type === "session.commentary.append" &&
-        (e as { event_id?: string }).event_id === "tool-speak-call_slots",
-    ) as { content: string; delegation_id: null };
-    expect(spoken.content).toBe("Tenho vaga às 10h.");
-    expect(spoken.delegation_id).toBeNull();
+    expect(tools).toEqual([]);
     expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
   });
 
@@ -530,7 +450,23 @@ describe("live-media WebSocket route", () => {
     expect(start.session.instructions).toMatch(/visitas e avaliações/);
     expect(start.session.instructions).toMatch(/Não digas «perfeito»/);
     expect(start.session.instructions).not.toMatch(/select_demo_vertical/);
-    expect(start.session.delegation.responses.tools.map((t) => t.name)).not.toContain("select_demo_vertical");
+    expect(start.session.instructions).toMatch(/Nunca digas «vou confirmar»/);
+    expect(start.session.delegation.responses.tools).toEqual([]);
+    expect(start.session.delegation.responses.tools.map((t) => t.name)).not.toContain("get_slots");
+    expect(start.session.delegation.responses.tools.map((t) => t.name)).not.toContain("book_appointment");
+    for (const slug of [
+      "clinica-central",
+      "barbearia-lisboa",
+      "restaurante-baixa",
+      "oficina-norte",
+      "imobiliaria-baixa",
+    ]) {
+      const spoken = demoSimulatedConfirmation(store.getBusinessBySlug(slug)!);
+      expect(spoken).toMatch(/às \d{2}h\d{2}/);
+      expect(spoken).toMatch(/Está marcada|Está marcado/);
+      expect(spoken).toMatch(/Envio confirmação por SMS/);
+      expect(start.session.instructions).toContain(spoken);
+    }
 
     openai.emitJson({ type: "session.started", session: { id: "live_exact" } });
     await viWait(() => openai.sent.some((e) => (e as { type?: string }).type === "session.commentary.append"));
@@ -549,74 +485,6 @@ describe("live-media WebSocket route", () => {
     );
     expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
     expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.instructions.append")).toHaveLength(0);
-
-    openai.emitJson({
-      type: "response.event",
-      event: {
-        type: "response.output_item.done",
-        item: {
-          type: "function_call",
-          status: "completed",
-          call_id: "call_slots",
-          name: "get_slots",
-          arguments: JSON.stringify({ service: "Revisão", date: "2026-08-27", vertical: "oficina" }),
-        },
-      },
-    });
-    await viWait(() =>
-      openai.sent.some((e) => {
-        if ((e as { type?: string }).type !== "response.item.create") return false;
-        return (e as { item?: { call_id?: string } }).item?.call_id === "call_slots";
-      }),
-    );
-    const slotOutput = openai.sent.find((e) => {
-      if ((e as { type?: string }).type !== "response.item.create") return false;
-      return (e as { item?: { call_id?: string } }).item?.call_id === "call_slots";
-    }) as { item: { output: string } };
-    const slots = JSON.parse(slotOutput.item.output) as { slots?: string[]; message?: string };
-    expect(slots.slots?.length).toBeGreaterThan(0);
-    expect(slots.message).toBeTruthy();
-
-    openai.emitJson({
-      type: "response.event",
-      event: {
-        type: "response.output_item.done",
-        item: {
-          type: "function_call",
-          status: "completed",
-          call_id: "call_book",
-          name: "book_appointment",
-          arguments: JSON.stringify({
-            service: "Revisão",
-            start: slots.slots![0],
-            customerName: "Rui",
-            vertical: "oficina",
-          }),
-        },
-      },
-    });
-    await viWait(() =>
-      openai.sent.some((e) => {
-        if ((e as { type?: string }).type !== "response.item.create") return false;
-        return (e as { item?: { call_id?: string } }).item?.call_id === "call_book";
-      }),
-    );
-    const bookOutput = openai.sent.find((e) => {
-      if ((e as { type?: string }).type !== "response.item.create") return false;
-      return (e as { item?: { call_id?: string } }).item?.call_id === "call_book";
-    }) as { item: { output: string } };
-    const booked = JSON.parse(bookOutput.item.output) as { ok?: boolean; speak?: string; message?: string };
-    expect(booked.ok).toBe(true);
-    expect(booked.speak).toMatch(/Está marcada/);
-    expect(booked.message).toBe(booked.speak);
-    const spoken = openai.sent.find(
-      (e) =>
-        (e as { type?: string }).type === "session.commentary.append" &&
-        (e as { event_id?: string }).event_id === "tool-speak-call_book",
-    ) as { content: string; delegation_id: null };
-    expect(spoken.content).toBe(booked.speak);
-    expect(spoken.delegation_id).toBeNull();
-    expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
   });
 });
 
@@ -633,7 +501,7 @@ describe("sessionConfigForLiveMedia", () => {
     expect(media.model).toBe("gpt-live-1");
     expect((media.audio as { format: unknown }).format).toEqual({ type: "audio/pcmu", rate: 8000 });
     expect(JSON.stringify(media)).not.toMatch(/select_demo_vertical/);
-    expect(JSON.stringify(media)).toMatch(/get_slots/);
+    expect((media.delegation as { responses: { tools: unknown[] } }).responses.tools).toEqual([]);
   });
 });
 
