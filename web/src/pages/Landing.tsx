@@ -354,6 +354,7 @@ export function Landing() {
   const [did, setDid] = useState(FALLBACK_DID);
   const [plans, setPlans] = useState<Plan[]>(FALLBACK_PLANS);
   const [onboardOpen, setOnboardOpen] = useState(false);
+  const [enterOpen, setEnterOpen] = useState(false);
   const [planId, setPlanId] = useState("pro");
 
   const [bizType, setBizType] = useState("barbearia");
@@ -432,6 +433,22 @@ export function Landing() {
               <a href={did.tel} style={{ fontFamily: MONO, fontSize: 14 }}>
                 {did.display}
               </a>
+              <button
+                type="button"
+                onClick={() => setEnterOpen(true)}
+                style={{
+                  border: 0,
+                  background: "transparent",
+                  cursor: "pointer",
+                  padding: "12px 10px",
+                  fontFamily: SANS,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: INK,
+                }}
+              >
+                Entrar
+              </button>
               <button
                 type="button"
                 onClick={() => setOnboardOpen(true)}
@@ -1385,6 +1402,7 @@ export function Landing() {
         </footer>
       </div>
 
+      <EnterDialog open={enterOpen} onOpenChange={setEnterOpen} />
       <OnboardDialog open={onboardOpen} onOpenChange={setOnboardOpen} planId={planId} onPlanChange={setPlanId} />
     </div>
   );
@@ -1439,7 +1457,123 @@ function SliderRow({ label, value, children }: { label: string; value: string; c
   );
 }
 
-/* Unchanged onboarding flow — same payload and redirect as before. */
+const LAST_SLUG_KEY = "atende.lastSlug";
+const PLAN_LABEL: Record<string, string> = { base: "Essencial", pro: "Pro", studio: "Estúdio" };
+const GENDER_LABEL: Record<string, string> = { feminino: "Feminina", masculino: "Masculina", neutro: "Neutra" };
+const LOCALE_LABEL: Record<string, string> = { pt: "Português", en: "Inglês" };
+const NUMBER_LABEL: Record<string, string> = { new: "Novo número +351", port: "Portar o meu número" };
+
+function readLastSlug(): string {
+  try {
+    return localStorage.getItem(LAST_SLUG_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberSlug(slug: string) {
+  try {
+    localStorage.setItem(LAST_SLUG_KEY, slug);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+/** Accepts a slug, /app/slug, or a full backoffice URL. */
+function parseBusinessSlug(input: string): string {
+  const raw = input.trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const appAt = parts.indexOf("app");
+    if (appAt >= 0 && parts[appAt + 1]) return parts[appAt + 1].toLowerCase();
+  } catch {
+    /* not an absolute URL */
+  }
+  const path = raw.replace(/^\/+/, "");
+  const match = path.match(/^(?:app\/)?([a-z0-9-]+)/i);
+  return (match?.[1] ?? "").toLowerCase();
+}
+
+function EnterDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [slug, setSlug] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setError("");
+      setSlug((current) => current || readLastSlug());
+    }
+  }, [open]);
+
+  async function submit() {
+    const next = parseBusinessSlug(slug);
+    if (!next) {
+      setError("Indique o endereço da conta, por exemplo clinica-esperanca.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/business/${next}`);
+      if (!res.ok) {
+        setError("Não encontrámos essa conta. Confirme o endereço ou crie um assistente.");
+        return;
+      }
+      rememberSlug(next);
+      window.location.href = `/app/${next}`;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Entrar</DialogTitle>
+          <DialogDescription>
+            Não há palavra-passe. Use o endereço da conta que ficou no URL depois de criar o assistente.
+          </DialogDescription>
+        </DialogHeader>
+        <Field>
+          <FieldLabel htmlFor="enter-slug">Endereço da conta</FieldLabel>
+          <Input
+            id="enter-slug"
+            name="slug"
+            autoComplete="off"
+            placeholder="clinica-esperanca"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+          />
+          <FieldDescription>É a parte final do URL, por exemplo /app/clinica-esperanca.</FieldDescription>
+        </Field>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <DialogFooter>
+          <Button disabled={busy || !slug.trim()} onClick={() => void submit()}>
+            Entrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* Unchanged onboarding payload and redirect. Wider two-column layout on laptop. */
 function OnboardDialog({
   open,
   onOpenChange,
@@ -1480,7 +1614,10 @@ function OnboardDialog({
         }),
       });
       const data = (await res.json()) as { slug?: string };
-      if (data.slug) window.location.href = `/app/${data.slug}?onboarded=1`;
+      if (data.slug) {
+        rememberSlug(data.slug);
+        window.location.href = `/app/${data.slug}?onboarded=1`;
+      }
     } finally {
       setBusy(false);
     }
@@ -1488,109 +1625,121 @@ function OnboardDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent layout="viewport">
+        <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12 sm:px-6">
           <DialogTitle>Criar assistente</DialogTitle>
           <DialogDescription>
             Nós pedimos o número por si. Só o publicamos depois da aprovação.
           </DialogDescription>
         </DialogHeader>
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="biz-name">Nome do negócio</FieldLabel>
-            <Input id="biz-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel>Tipo</FieldLabel>
-            <Select value={useCase} onValueChange={(value) => value && setUseCase(String(value))}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {USE_CASES.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel>Plano</FieldLabel>
-            <Select value={planId} onValueChange={(value) => value && onPlanChange(String(value))}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="base">Essencial</SelectItem>
-                  <SelectItem value="pro">Pro</SelectItem>
-                  <SelectItem value="studio">Estúdio</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="agent-name">Nome do assistente</FieldLabel>
-            <Input id="agent-name" value={agentName} onChange={(e) => setAgentName(e.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel>Voz</FieldLabel>
-            <Select value={agentGender} onValueChange={(value) => value && setAgentGender(String(value))}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="feminino">Feminina</SelectItem>
-                  <SelectItem value="masculino">Masculina</SelectItem>
-                  <SelectItem value="neutro">Neutra</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel>Idioma</FieldLabel>
-            <Select value={locale} onValueChange={(value) => value && setLocale(String(value))}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="pt">Português</SelectItem>
-                  <SelectItem value="en">Inglês</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="email">Email</FieldLabel>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="phone">Telemóvel</FieldLabel>
-            <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-            <FieldDescription>Opcional, para reconhecermos a chamada da demo.</FieldDescription>
-          </Field>
-          <Field>
-            <FieldLabel>Número</FieldLabel>
-            <Select value={numberPreference} onValueChange={(value) => value && setNumberPreference(String(value))}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="new">Novo número +351</SelectItem>
-                  <SelectItem value="port">Portar o meu número</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-        </FieldGroup>
-        <DialogFooter>
-          <Button disabled={busy || !name.trim()} onClick={() => void submit()}>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-6">
+          <FieldGroup className="gap-3">
+            <Field>
+              <FieldLabel htmlFor="biz-name">Nome do negócio</FieldLabel>
+              <Input id="biz-name" name="organization" autoComplete="organization" value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field>
+                <FieldLabel>Tipo</FieldLabel>
+                <Select value={useCase} onValueChange={(value) => value && setUseCase(String(value))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue>{USE_CASES.find((item) => item.value === useCase)?.label ?? useCase}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {USE_CASES.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel>Plano</FieldLabel>
+                <Select value={planId} onValueChange={(value) => value && onPlanChange(String(value))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue>{PLAN_LABEL[planId] ?? planId}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="base">Essencial</SelectItem>
+                      <SelectItem value="pro">Pro</SelectItem>
+                      <SelectItem value="studio">Estúdio</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="agent-name">Nome do assistente</FieldLabel>
+                <Input id="agent-name" name="agent-name" autoComplete="off" value={agentName} onChange={(e) => setAgentName(e.target.value)} />
+              </Field>
+              <Field>
+                <FieldLabel>Voz</FieldLabel>
+                <Select value={agentGender} onValueChange={(value) => value && setAgentGender(String(value))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue>{GENDER_LABEL[agentGender] ?? agentGender}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="feminino">Feminina</SelectItem>
+                      <SelectItem value="masculino">Masculina</SelectItem>
+                      <SelectItem value="neutro">Neutra</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel>Idioma</FieldLabel>
+                <Select value={locale} onValueChange={(value) => value && setLocale(String(value))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue>{LOCALE_LABEL[locale] ?? locale}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="pt">Português</SelectItem>
+                      <SelectItem value="en">Inglês</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <Input id="email" name="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="phone">Telemóvel</FieldLabel>
+                <Input
+                  id="phone"
+                  name="tel"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+                <FieldDescription>Opcional, para reconhecermos a chamada da demo.</FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel>Número</FieldLabel>
+                <Select value={numberPreference} onValueChange={(value) => value && setNumberPreference(String(value))}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue>{NUMBER_LABEL[numberPreference] ?? numberPreference}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="new">Novo número +351</SelectItem>
+                      <SelectItem value="port">Portar o meu número</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          </FieldGroup>
+        </div>
+        <DialogFooter className="m-0 shrink-0 rounded-none border-t bg-background p-4 sm:rounded-b-xl">
+          <Button className="w-full sm:w-auto" disabled={busy || !name.trim()} onClick={() => void submit()}>
             Continuar
           </Button>
         </DialogFooter>
