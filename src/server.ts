@@ -13,6 +13,14 @@ import type { AgentGender, Business, PlanId, Resource, UseCase, WeeklyHours } fr
 import { Store } from "./store/store.js";
 import { createPersistence } from "./store/persistence.js";
 import { createScheduler } from "./scheduling/index.js";
+import {
+  buildGoogleAuthUrl,
+  completeGoogleOAuth,
+  disconnectGoogleCalendar,
+  googleOAuthConfigured,
+  publicPersonAccount,
+  syncGoogleCalendar,
+} from "./scheduling/googleCalendar.js";
 import { ConversationManager, greeting } from "./agent/conversation.js";
 import { BillingService } from "./billing/stripe.js";
 import { ensureUsagePeriod } from "./billing/usage.js";
@@ -251,10 +259,19 @@ app.get("/api/business/:slug", async (req, res) => {
   const subscription = shared ? overlaySharedUsage(business, owner) : business.subscription;
   const number = shared ? overlaySharedNumber(business) : business.number;
   const usage = demoDidUsageView(business);
+  const account = store.getOwnerAccount(business.id);
+  const pushedIds = new Set(
+    store.listBookings(business.id).map((booking) => booking.googleEventId).filter(Boolean),
+  );
+  const googleEvents = (account?.google?.overlayEvents ?? []).filter(
+    (event) => !pushedIds.has(event.googleEventId),
+  );
   res.json({
     business: publicBusiness({ ...business, subscription, number }),
     bookings: store.listBookings(business.id),
     calls: store.listCalls(owner.id),
+    account: account ? publicPersonAccount(account) : null,
+    googleEvents,
     features: featureFlags(),
     telephonyProvider: telephony.providerName,
     usageSource: shared
@@ -482,6 +499,68 @@ app.post("/api/business/:slug/assistant/rewrite", async (req, res) => {
   const knowledge = typeof req.body?.knowledge === "string" ? req.body.knowledge : business.agentKnowledge;
   const result = await rewriteAgentScript({ draft, knowledge, locale: business.locale });
   res.json(result);
+});
+
+// ---- Google Calendar (Agenda connect + sync). Tokens persist on PersonAccount. ----
+
+app.get("/api/business/:slug/google/connect", (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  if (!googleOAuthConfigured()) {
+    res.status(503).json({
+      error: "google_not_configured",
+      message: "Google Calendar ainda não está configurado (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).",
+    });
+    return;
+  }
+  const account = store.getOwnerAccount(business.id);
+  if (!account) {
+    res.status(500).json({ error: "account_missing" });
+    return;
+  }
+  const state = store.createOAuthState(business.id, account.id);
+  res.json({ url: buildGoogleAuthUrl(state.id) });
+});
+
+app.get("/api/google/oauth/callback", async (req, res) => {
+  const slugHint = typeof req.query.slug === "string" ? req.query.slug : "";
+  if (typeof req.query.error === "string" && req.query.error) {
+    res.redirect(`/app/${slugHint}?google=error`);
+    return;
+  }
+  const state = typeof req.query.state === "string" ? req.query.state : "";
+  const code = typeof req.query.code === "string" ? req.query.code : "";
+  if (!state || !code) {
+    res.redirect(slugHint ? `/app/${slugHint}?google=error` : "/?google=error");
+    return;
+  }
+  const result = await completeGoogleOAuth(store, state, code);
+  const slug = result.slug || slugHint;
+  if (!slug) {
+    res.redirect("/?google=error");
+    return;
+  }
+  res.redirect(`/app/${slug}?google=${result.ok ? "connected" : "error"}`);
+});
+
+app.post("/api/business/:slug/google/sync", async (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  const result = await syncGoogleCalendar(store, business.id);
+  const account = store.getOwnerAccount(business.id);
+  res.status(result.ok ? 200 : 409).json({
+    ...result,
+    account: account ? publicPersonAccount(account) : null,
+    googleEvents: account?.google?.overlayEvents ?? [],
+  });
+});
+
+app.post("/api/business/:slug/google/disconnect", async (req, res) => {
+  const business = requireBusiness(req, res);
+  if (!business) return;
+  await disconnectGoogleCalendar(store, business.id);
+  const account = store.getOwnerAccount(business.id);
+  res.json({ account: account ? publicPersonAccount(account) : null, googleEvents: [] });
 });
 
 app.post("/api/business/:slug/number", async (req, res) => {

@@ -83,6 +83,7 @@ describe("teal chrome on public and backoffice surfaces", () => {
     expect(backoffice).toContain("Pendente de Aprovação Regulatória");
     expect(backoffice).toContain("Telnyx");
     expect(backoffice).toContain("2 dias úteis");
+    expect(backoffice).toContain("Ligar Google Calendar");
     expect(backoffice).not.toContain("Estamos a preparar a sua conta");
     expect(backoffice).not.toContain("Aguarda aprovação");
     expect(backoffice).not.toContain("O backoffice abre nessa altura");

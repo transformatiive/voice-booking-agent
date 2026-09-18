@@ -85,6 +85,7 @@ interface Booking {
   customerPhone: string | null;
   source: string;
   resourceId: string;
+  googleEventId?: string | null;
 }
 
 interface CallRow {
@@ -106,11 +107,34 @@ interface UsageSource {
   nsn?: string;
 }
 
+interface GoogleEvent {
+  id: string;
+  googleEventId: string;
+  title: string;
+  start: string;
+  end: string;
+}
+
+interface Account {
+  id: string;
+  email: string | null;
+  google: {
+    connected: boolean;
+    googleEmail: string | null;
+    calendarId: string | null;
+    lastSyncAt: string | null;
+    lastSyncError: string | null;
+    syncStatus: "disconnected" | "connected" | "syncing" | "error";
+  };
+}
+
 interface Payload {
   business: Business;
   bookings: Booking[];
   calls: CallRow[];
-  features: { demoActivate?: boolean; stripe?: boolean; gptLive?: boolean };
+  account: Account | null;
+  googleEvents: GoogleEvent[];
+  features: { demoActivate?: boolean; stripe?: boolean; gptLive?: boolean; googleCalendar?: boolean };
   usageSource?: UsageSource;
 }
 
@@ -293,7 +317,7 @@ const NAV: Array<[Tab, string]> = [
 
 export function Backoffice() {
   const { slug = "" } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [state, setState] = useState<Payload | null>(null);
   const [tab, setTab] = useState<Tab>(() => tabFromLocation());
   const [flash, setFlash] = useState("");
@@ -324,6 +348,18 @@ export function Backoffice() {
   useEffect(() => {
     void load();
   }, [slug]);
+
+  useEffect(() => {
+    const google = searchParams.get("google");
+    if (!google) return;
+    if (google === "connected") setFlash("Google Calendar ligado.");
+    else setFlash("Não foi possível ligar o Google Calendar.");
+    const next = new URLSearchParams(searchParams);
+    next.delete("google");
+    setSearchParams(next, { replace: true });
+    const t = setTimeout(() => setFlash(""), 4000);
+    return () => clearTimeout(t);
+  }, [searchParams, setSearchParams]);
 
   async function patch(body: Record<string, unknown>) {
     const res = await fetch(`/api/business/${slug}`, {
@@ -455,7 +491,20 @@ export function Backoffice() {
           </div>
         ) : null}
 
-        {tab === "agenda" ? <Agenda bookings={state.bookings} /> : null}
+        {tab === "agenda" ? (
+          <Agenda
+            slug={slug}
+            bookings={state.bookings}
+            account={state.account}
+            googleEvents={state.googleEvents ?? []}
+            googleConfigured={Boolean(state.features.googleCalendar)}
+            onChanged={load}
+            onFlash={(msg) => {
+              setFlash(msg);
+              setTimeout(() => setFlash(""), 2500);
+            }}
+          />
+        ) : null}
         {tab === "chamadas" ? <Chamadas calls={state.calls ?? []} usageSource={state.usageSource} /> : null}
         {tab === "recursos" ? <Recursos business={b} slug={slug} onChange={load} /> : null}
         {tab === "servicos" ? <Servicos business={b} slug={slug} onChange={load} /> : null}
@@ -519,19 +568,63 @@ function PrimaryButton({ children, onClick, disabled }: { children: ReactNode; o
 
 /* ------------------------------------------------------------------ agenda */
 
-function Agenda({ bookings }: { bookings: Booking[] }) {
+type ItemTone = "call" | "web" | "google";
+
+function itemTone(source: string): ItemTone {
+  if (source === "voice" || source === "call") return "call";
+  if (source === "google") return "google";
+  return "web";
+}
+
+function Agenda({
+  slug,
+  bookings,
+  account,
+  googleEvents,
+  googleConfigured,
+  onChanged,
+  onFlash,
+}: {
+  slug: string;
+  bookings: Booking[];
+  account: Account | null;
+  googleEvents: GoogleEvent[];
+  googleConfigured: boolean;
+  onChanged: () => Promise<void>;
+  onFlash: (msg: string) => void;
+}) {
   const [view, setView] = useState<View>("week");
   const [cursor, setCursor] = useState(() => new Date());
+  const [busy, setBusy] = useState<"connect" | "sync" | "disconnect" | null>(null);
+
+  const google = account?.google;
+  const connected = Boolean(google?.connected);
+
+  const items = useMemo(() => {
+    const pushedIds = new Set(bookings.map((bk) => bk.googleEventId).filter(Boolean));
+    const overlay: Booking[] = googleEvents
+      .filter((event) => !pushedIds.has(event.googleEventId))
+      .map((event) => ({
+        id: event.id,
+        start: event.start,
+        serviceName: event.title,
+        customerName: "Google Calendar",
+        customerPhone: null,
+        source: "google",
+        googleEventId: event.googleEventId,
+      }));
+    return [...bookings, ...overlay];
+  }, [bookings, googleEvents]);
 
   const byDate = useMemo(() => {
     const map: Record<string, Booking[]> = {};
-    for (const bk of bookings) {
+    for (const bk of items) {
       const key = iso(new Date(bk.start));
       (map[key] ||= []).push(bk);
     }
     for (const key of Object.keys(map)) map[key].sort((a, b) => a.start.localeCompare(b.start));
     return map;
-  }, [bookings]);
+  }, [items]);
 
   const today = new Date();
   const todayKey = iso(today);
@@ -558,7 +651,7 @@ function Agenda({ bookings }: { bookings: Booking[] }) {
       : `${MONTHS[cursor.getMonth()]} de ${cursor.getFullYear()}`;
 
   const dayItems = byDate[iso(cursor)] ?? [];
-  const callsToday = (byDate[todayKey] ?? []).filter((b) => b.source === "voice").length;
+  const callsToday = (byDate[todayKey] ?? []).filter((b) => itemTone(b.source) === "call").length;
   const totalToday = (byDate[todayKey] ?? []).length;
 
   const seg = (id: View) => ({
@@ -568,6 +661,50 @@ function Agenda({ bookings }: { bookings: Booking[] }) {
     color: view === id ? INK : BODY,
   });
 
+  async function connect() {
+    setBusy("connect");
+    try {
+      const res = await fetch(`/api/business/${slug}/google/connect`);
+      const data = (await res.json()) as { url?: string; message?: string; error?: string };
+      if (data.url) {
+        window.location.assign(data.url);
+        return;
+      }
+      onFlash(data.message || "Google Calendar ainda não está configurado.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function syncNow() {
+    setBusy("sync");
+    try {
+      const res = await fetch(`/api/business/${slug}/google/sync`, { method: "POST" });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      await onChanged();
+      onFlash(data.ok ? "Agenda sincronizada com o Google Calendar." : "Não foi possível sincronizar o Google Calendar.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function disconnect() {
+    setBusy("disconnect");
+    try {
+      await fetch(`/api/business/${slug}/google/disconnect`, { method: "POST" });
+      await onChanged();
+      onFlash("Google Calendar desligado.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const statusLabel = connected
+    ? google?.googleEmail
+      ? `Ligado a ${google.googleEmail}`
+      : "Ligado ao Google Calendar"
+    : "Ainda não ligado ao Google Calendar";
+
   return (
     <>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
@@ -575,6 +712,58 @@ function Agenda({ bookings }: { bookings: Booking[] }) {
         <Kpi label="Entraram por chamada" value={String(callsToday)} accent />
         <Kpi label="Marcadas na web" value={String(totalToday - callsToday)} />
       </div>
+
+      <div
+        style={{
+          display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14,
+          padding: "16px 20px", borderRadius: 18, background: "#fff", border: `1px solid ${LINE}`,
+        }}
+      >
+        <div>
+          <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 16 }}>Google Calendar</div>
+          <p style={{ margin: "6px 0 0", fontSize: 14, color: MUTED, maxWidth: 560 }}>
+            {connected
+              ? `${statusLabel}. As marcações do backoffice passam para o calendário desta pessoa e os eventos do Google aparecem na agenda.`
+              : `Ligue o calendário da pessoa de contacto${account?.email ? ` (${account.email})` : ""}. Ainda não há login com palavra-passe — só este email e o Google.`}
+          </p>
+          {google?.lastSyncError ? (
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#9a3b32" }}>{google.lastSyncError}</p>
+          ) : null}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {connected ? (
+            <>
+              <button
+                type="button"
+                className="bo-ghost"
+                disabled={busy !== null}
+                onClick={() => void syncNow()}
+                style={{ padding: "12px 18px", borderRadius: 999, border: "1px solid #d7e0e8", background: "#fff", cursor: "pointer", fontFamily: SANS, fontSize: 14, fontWeight: 700, color: BODY }}
+              >
+                {busy === "sync" ? "A sincronizar…" : "Sincronizar agora"}
+              </button>
+              <button
+                type="button"
+                className="bo-ghost"
+                disabled={busy !== null}
+                onClick={() => void disconnect()}
+                style={{ padding: "12px 18px", borderRadius: 999, border: "1px solid #d7e0e8", background: "#fff", cursor: "pointer", fontFamily: SANS, fontSize: 14, fontWeight: 700, color: BODY }}
+              >
+                Desligar
+              </button>
+            </>
+          ) : (
+            <PrimaryButton onClick={() => void connect()}>
+              {busy === "connect" ? "A ligar…" : "Ligar Google Calendar"}
+            </PrimaryButton>
+          )}
+        </div>
+      </div>
+      {!googleConfigured && !connected ? (
+        <p style={{ margin: 0, fontSize: 13, color: MUTED }}>
+          O botão está visível; falta configurar GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET no Railway para completar o OAuth.
+        </p>
+      ) : null}
 
       <div style={{ borderRadius: 22, background: "#fff", border: `1px solid ${LINE}`, overflow: "hidden" }}>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "18px 22px", borderBottom: `1px solid ${LINE}` }}>
@@ -605,7 +794,8 @@ function Agenda({ bookings }: { bookings: Booking[] }) {
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, padding: "15px 22px", borderTop: `1px solid ${LINE}`, fontSize: 13, color: MUTED }}>
           <Legend color={ACCENT} label="marcado por chamada" />
           <Legend color="#dde4ea" label="marcado na web" />
-          <span style={{ marginLeft: "auto" }}>Sincronizado com o Google Calendar</span>
+          <Legend color="#4285F4" label="Google Calendar" />
+          <span style={{ marginLeft: "auto" }}>{connected ? statusLabel : "Ainda não ligado ao Google Calendar"}</span>
         </div>
       </div>
     </>
@@ -654,7 +844,9 @@ function DayView({ items }: { items: Booking[] }) {
   return (
     <div>
       {items.map((bk) => {
-        const call = bk.source === "voice";
+        const tone = itemTone(bk.source);
+        const tag =
+          tone === "call" ? "por chamada" : tone === "google" ? "Google" : "web";
         return (
           <div key={bk.id} style={{ display: "grid", gridTemplateColumns: "76px 1fr auto", alignItems: "center", gap: 16, padding: "17px 22px", borderBottom: `1px solid ${HAIRLINE}` }}>
             <span style={{ fontFamily: MONO, fontSize: 14, color: BODY }}>{timeOf(bk.start)}</span>
@@ -662,7 +854,7 @@ function DayView({ items }: { items: Booking[] }) {
               <div style={{ fontSize: 16, fontWeight: 600 }}>{bk.serviceName}</div>
               <div style={{ fontSize: 14, color: MUTED, marginTop: 2 }}>{bk.customerName || "Sem nome"}</div>
             </div>
-            <Tag strong={call}>{call ? "por chamada" : "web"}</Tag>
+            <Tag strong={tone === "call"}>{tag}</Tag>
           </div>
         );
       })}
@@ -694,15 +886,18 @@ function WeekView({ weekStart, byDate, todayKey }: { weekStart: Date; byDate: Re
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "12px 10px" }}>
                 {items.map((bk) => {
-                  const call = bk.source === "voice";
+                  const tone = itemTone(bk.source);
+                  const bg = tone === "call" ? ACCENT : tone === "google" ? "#4285F4" : HAIRLINE;
+                  const fg = tone === "web" ? BODY : "#fff";
+                  const bar = tone === "call" ? "oklch(0.36 0.1 168)" : tone === "google" ? "#2b5fd4" : "#c9d3db";
                   return (
                     <div
                       key={bk.id}
                       style={{
                         padding: "9px 11px", borderRadius: 11,
-                        background: call ? ACCENT : HAIRLINE,
-                        color: call ? "#fff" : BODY,
-                        borderLeft: `3px solid ${call ? "oklch(0.36 0.1 168)" : "#c9d3db"}`,
+                        background: bg,
+                        color: fg,
+                        borderLeft: `3px solid ${bar}`,
                       }}
                     >
                       <div style={{ fontFamily: MONO, fontSize: 11 }}>{timeOf(bk.start)}</div>
@@ -755,13 +950,15 @@ function MonthView({ cursor, byDate, todayKey }: { cursor: Date; byDate: Record<
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
                 {items.slice(0, 2).map((bk) => {
-                  const call = bk.source === "voice";
+                  const tone = itemTone(bk.source);
+                  const bg = tone === "call" ? ACCENT : tone === "google" ? "#4285F4" : HAIRLINE;
+                  const fg = tone === "web" ? BODY : "#fff";
                   return (
                     <div
                       key={bk.id}
                       style={{
                         padding: "4px 7px", borderRadius: 7,
-                        background: call ? ACCENT : HAIRLINE, color: call ? "#fff" : BODY,
+                        background: bg, color: fg,
                         fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                       }}
                     >

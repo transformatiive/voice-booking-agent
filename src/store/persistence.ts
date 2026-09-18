@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import pgPkg from "pg";
 import { config } from "../config.js";
-import type { Booking, Business, Call } from "../domain/types.js";
+import type { Booking, Business, Call, OAuthState, PersonAccount } from "../domain/types.js";
 
 const { Pool } = pgPkg;
 type PgPool = InstanceType<typeof Pool>;
@@ -11,10 +11,22 @@ export interface Db {
   businesses: Business[];
   bookings: Booking[];
   calls: Call[];
+  accounts: PersonAccount[];
+  oauthStates: OAuthState[];
 }
 
 export function emptyDb(): Db {
-  return { businesses: [], bookings: [], calls: [] };
+  return { businesses: [], bookings: [], calls: [], accounts: [], oauthStates: [] };
+}
+
+function coerceDb(parsed: Partial<Db> | null | undefined): Db {
+  return {
+    businesses: parsed?.businesses ?? [],
+    bookings: parsed?.bookings ?? [],
+    calls: parsed?.calls ?? [],
+    accounts: parsed?.accounts ?? [],
+    oauthStates: parsed?.oauthStates ?? [],
+  };
 }
 
 /**
@@ -49,7 +61,7 @@ export class FilePersistence implements Persistence {
     }
     try {
       const parsed = JSON.parse(readFileSync(this.file, "utf8")) as Partial<Db>;
-      return { businesses: parsed.businesses ?? [], bookings: parsed.bookings ?? [], calls: parsed.calls ?? [] };
+      return coerceDb(parsed);
     } catch {
       return null;
     }
@@ -61,10 +73,11 @@ export class FilePersistence implements Persistence {
 }
 
 /**
- * Postgres persistence (e.g. Railway Postgres). Data is stored in two JSONB
+ * Postgres persistence (e.g. Railway Postgres). Data is stored in JSONB
  * tables; the full snapshot is rewritten within a transaction on each save.
- * Write volume for this product is low and the dataset is small, so this is
- * simple and correct; it can later be optimized to targeted upserts.
+ *
+ * Tables: businesses, bookings, calls, accounts (person + Google OAuth tokens),
+ * oauth_states (CSRF state for Google connect — not memory-only).
  */
 export class PostgresPersistence implements Persistence {
   readonly kind = "postgres" as const;
@@ -94,6 +107,7 @@ export class PostgresPersistence implements Persistence {
         data JSONB NOT NULL
       );
     `);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS bookings_business_idx ON bookings (business_id);`);
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS calls (
         id TEXT PRIMARY KEY,
@@ -102,18 +116,36 @@ export class PostgresPersistence implements Persistence {
       );
     `);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS calls_business_idx ON calls (business_id);`);
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY,
+        business_id TEXT NOT NULL,
+        data JSONB NOT NULL
+      );
+    `);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS accounts_business_idx ON accounts (business_id);`);
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS oauth_states (
+        id TEXT PRIMARY KEY,
+        data JSONB NOT NULL
+      );
+    `);
   }
 
   async load(): Promise<Db> {
-    const [businesses, bookings, calls] = await Promise.all([
+    const [businesses, bookings, calls, accounts, oauthStates] = await Promise.all([
       this.pool.query<{ data: Business }>("SELECT data FROM businesses"),
       this.pool.query<{ data: Booking }>("SELECT data FROM bookings"),
       this.pool.query<{ data: Call }>("SELECT data FROM calls"),
+      this.pool.query<{ data: PersonAccount }>("SELECT data FROM accounts"),
+      this.pool.query<{ data: OAuthState }>("SELECT data FROM oauth_states"),
     ]);
     return {
       businesses: businesses.rows.map((r) => r.data),
       bookings: bookings.rows.map((r) => r.data),
       calls: calls.rows.map((r) => r.data),
+      accounts: accounts.rows.map((r) => r.data),
+      oauthStates: oauthStates.rows.map((r) => r.data),
     };
   }
 
@@ -124,6 +156,8 @@ export class PostgresPersistence implements Persistence {
       await client.query("DELETE FROM businesses");
       await client.query("DELETE FROM bookings");
       await client.query("DELETE FROM calls");
+      await client.query("DELETE FROM accounts");
+      await client.query("DELETE FROM oauth_states");
       for (const b of db.businesses) {
         await client.query("INSERT INTO businesses (id, slug, data) VALUES ($1, $2, $3)", [b.id, b.slug, b]);
       }
@@ -132,6 +166,16 @@ export class PostgresPersistence implements Persistence {
       }
       for (const call of db.calls ?? []) {
         await client.query("INSERT INTO calls (id, business_id, data) VALUES ($1, $2, $3)", [call.id, call.businessId, call]);
+      }
+      for (const account of db.accounts ?? []) {
+        await client.query("INSERT INTO accounts (id, business_id, data) VALUES ($1, $2, $3)", [
+          account.id,
+          account.businessId,
+          account,
+        ]);
+      }
+      for (const state of db.oauthStates ?? []) {
+        await client.query("INSERT INTO oauth_states (id, data) VALUES ($1, $2)", [state.id, state]);
       }
       await client.query("COMMIT");
     } catch (err) {

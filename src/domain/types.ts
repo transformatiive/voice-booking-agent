@@ -132,6 +132,8 @@ export interface Booking {
   end: string;
   source: BookingSource;
   calBookingUid: string | null;
+  /** Google Calendar event id after a successful push. */
+  googleEventId: string | null;
   createdAt: string;
 }
 
@@ -154,4 +156,54 @@ export interface Call {
   status: CallStatus;
   stripeUsageReported: boolean;
   createdAt: string;
+}
+
+export type GoogleSyncStatus = "disconnected" | "connected" | "syncing" | "error";
+
+/** Pulled Google event shown on the backoffice Agenda (not a local booking). */
+export interface GoogleOverlayEvent {
+  id: string;
+  googleEventId: string;
+  title: string;
+  start: string;
+  end: string;
+}
+
+/**
+ * OAuth tokens + sync state for one person's Google Calendar.
+ * Tokens are persisted (Postgres/file) — never memory-only.
+ */
+export interface GoogleCalendarConnection {
+  googleEmail: string | null;
+  accessToken: string;
+  refreshToken: string | null;
+  tokenExpiresAt: string | null;
+  scope: string | null;
+  calendarId: string;
+  connectedAt: string;
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+  syncStatus: Exclude<GoogleSyncStatus, "disconnected">;
+  overlayEvents: GoogleOverlayEvent[];
+}
+
+/**
+ * Person under a business. This is not a login user: there is no password and
+ * Entrar remains slug-only. Email is the onboard contact; Google OAuth attaches here.
+ */
+export interface PersonAccount {
+  id: string;
+  businessId: string;
+  email: string | null;
+  createdAt: string;
+  google: GoogleCalendarConnection | null;
+}
+
+/** Short-lived CSRF state for Google OAuth, persisted with the rest of the store. */
+export interface OAuthState {
+  id: string;
+  businessId: string;
+  accountId: string;
+  createdAt: string;
+  expiresAt: string;
 }

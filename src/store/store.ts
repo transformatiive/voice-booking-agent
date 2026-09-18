@@ -6,6 +6,8 @@ import type {
   Call,
   Locale,
   NumberPreference,
+  OAuthState,
+  PersonAccount,
   PlanId,
   Resource,
   UseCase,
@@ -19,6 +21,8 @@ import { DEMO_DID_E164 } from "../telephony/demoDid.js";
 import type { Db, Persistence } from "./persistence.js";
 import { emptyDb } from "./persistence.js";
 import { MARKETING_DEMO_SLUG } from "./seed.js";
+
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 export interface CreateBusinessInput {
   name: string;
@@ -44,6 +48,16 @@ function slugify(name: string): string {
     .slice(0, 40);
 }
 
+function newOwnerAccount(business: Business): PersonAccount {
+  return {
+    id: randomUUID(),
+    businessId: business.id,
+    email: business.contactEmail,
+    createdAt: new Date().toISOString(),
+    google: null,
+  };
+}
+
 export class Store {
   private db: Db = emptyDb();
   /** Serializes async persists so the latest state always wins. */
@@ -53,7 +67,9 @@ export class Store {
     const loaded = persistence.loadSync?.();
     if (loaded) {
       this.db = loaded;
-      this.normalize();
+      if (this.normalize()) {
+        this.persist();
+      }
     }
   }
 
@@ -64,29 +80,53 @@ export class Store {
     }
     if (this.persistence.load) {
       this.db = await this.persistence.load();
-      this.normalize();
+      if (this.normalize()) {
+        this.persist();
+      }
     }
   }
 
   /** Backfill fields added after some rows were persisted (forward-compat). */
-  private normalize(): void {
+  private normalize(): boolean {
+    let changed = false;
     if (!this.db.calls) {
       this.db.calls = [];
+      changed = true;
+    }
+    if (!this.db.accounts) {
+      this.db.accounts = [];
+      changed = true;
+    }
+    if (!this.db.oauthStates) {
+      this.db.oauthStates = [];
+      changed = true;
     }
     for (const b of this.db.businesses) {
       // Rows created before the account-status feature were already operational,
       // so treat any missing/invalid status as active.
       if (b.status !== "pending" && b.status !== "active") {
         b.status = "active";
+        changed = true;
       }
       if (b.numberPreference !== "new" && b.numberPreference !== "port") {
         b.numberPreference = "new";
+        changed = true;
       }
       if (b.contactEmail === undefined) {
         b.contactEmail = null;
+        changed = true;
       }
       if (b.contactPhone === undefined) {
         b.contactPhone = null;
+        changed = true;
+      }
+      const owner = this.db.accounts.find((account) => account.businessId === b.id);
+      if (!owner) {
+        this.db.accounts.push(newOwnerAccount(b));
+        changed = true;
+      } else if (!owner.email && b.contactEmail) {
+        owner.email = b.contactEmail;
+        changed = true;
       }
       const serviceIds = b.services.map((s) => s.id);
       b.resources = b.resources.map((resource) => normalizeResource(resource, serviceIds));
@@ -130,6 +170,19 @@ export class Store {
         booking.resourceId = fallbackResource(booking.businessId);
       }
     }
+    for (const booking of this.db.bookings) {
+      if (booking.googleEventId === undefined) {
+        booking.googleEventId = null;
+        changed = true;
+      }
+    }
+    const now = Date.now();
+    const nextStates = this.db.oauthStates.filter((state) => Date.parse(state.expiresAt) > now);
+    if (nextStates.length !== this.db.oauthStates.length) {
+      this.db.oauthStates = nextStates;
+      changed = true;
+    }
+    return changed;
   }
 
   /** Wait for all pending writes to flush (useful in tests/shutdown). */
@@ -221,6 +274,7 @@ export class Store {
     };
     ensureUsagePeriod(business.subscription, new Date(createdAt));
     this.db.businesses.push(business);
+    this.db.accounts.push(newOwnerAccount(business));
     this.persist();
     return business;
   }
@@ -231,6 +285,10 @@ export class Store {
       return undefined;
     }
     Object.assign(business, patch, { id: business.id, slug: business.slug });
+    const owner = this.db.accounts.find((account) => account.businessId === business.id);
+    if (owner && !owner.email && business.contactEmail) {
+      owner.email = business.contactEmail;
+    }
     this.persist();
     return business;
   }
@@ -258,6 +316,70 @@ export class Store {
     });
   }
 
+  // --- Person / account (email + Google OAuth; no password) ---
+
+  listAccounts(businessId: string): PersonAccount[] {
+    return this.db.accounts.filter((account) => account.businessId === businessId);
+  }
+
+  getAccount(id: string): PersonAccount | undefined {
+    return this.db.accounts.find((account) => account.id === id);
+  }
+
+  /** Owner person for Google OAuth. Created on onboard; backfilled for older rows. */
+  getOwnerAccount(businessId: string): PersonAccount | undefined {
+    const business = this.getBusiness(businessId);
+    if (!business) {
+      return undefined;
+    }
+    const existing = this.db.accounts.find((account) => account.businessId === businessId);
+    if (existing) {
+      return existing;
+    }
+    const created = newOwnerAccount(business);
+    this.db.accounts.push(created);
+    this.persist();
+    return created;
+  }
+
+  saveAccount(account: PersonAccount): void {
+    const index = this.db.accounts.findIndex((row) => row.id === account.id);
+    if (index >= 0) {
+      this.db.accounts[index] = account;
+    } else {
+      this.db.accounts.push(account);
+    }
+    this.persist();
+  }
+
+  createOAuthState(businessId: string, accountId: string): OAuthState {
+    const now = Date.now();
+    const state: OAuthState = {
+      id: randomUUID(),
+      businessId,
+      accountId,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + OAUTH_STATE_TTL_MS).toISOString(),
+    };
+    this.db.oauthStates.push(state);
+    this.persist();
+    return state;
+  }
+
+  consumeOAuthState(id: string): OAuthState | null {
+    const index = this.db.oauthStates.findIndex((state) => state.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const state = this.db.oauthStates[index];
+    this.db.oauthStates.splice(index, 1);
+    this.persist();
+    if (Date.parse(state.expiresAt) <= Date.now()) {
+      return null;
+    }
+    return state;
+  }
+
   // --- Bookings ---
 
   listBookings(businessId: string): Booking[] {
@@ -271,6 +393,16 @@ export class Store {
     this.persist();
   }
 
+  updateBooking(businessId: string, bookingId: string, patch: Partial<Booking>): Booking | undefined {
+    const booking = this.db.bookings.find((row) => row.id === bookingId && row.businessId === businessId);
+    if (!booking) {
+      return undefined;
+    }
+    Object.assign(booking, patch, { id: booking.id, businessId: booking.businessId });
+    this.persist();
+    return booking;
+  }
+
   removeBooking(businessId: string, bookingId: string): boolean {
     const index = this.db.bookings.findIndex(
       (b) => b.id === bookingId && b.businessId === businessId,
@@ -281,16 +413,6 @@ export class Store {
     this.db.bookings.splice(index, 1);
     this.persist();
     return true;
-  }
-
-  updateBooking(businessId: string, bookingId: string, patch: Partial<Booking>): Booking | undefined {
-    const booking = this.db.bookings.find((b) => b.id === bookingId && b.businessId === businessId);
-    if (!booking) {
-      return undefined;
-    }
-    Object.assign(booking, patch, { id: booking.id, businessId: booking.businessId });
-    this.persist();
-    return booking;
   }
 
   // --- Calls ---

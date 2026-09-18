@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Booking, Business, Service } from "../domain/types.js";
 import type { Store } from "../store/store.js";
 import { checkAvailability, suggestSlots } from "./availability.js";
+import { pushBookingToGoogle } from "./googleCalendar.js";
 import type { BookInput, BookResult, Scheduler, Slot } from "./scheduler.js";
 
 /** Self-contained scheduler backed by the local store and availability engine. */
@@ -58,9 +59,11 @@ export class InMemoryScheduler implements Scheduler {
       end: end.toISOString(),
       source: input.source,
       calBookingUid: null,
+      googleEventId: null,
       createdAt: new Date().toISOString(),
     };
     this.store.addBooking(booking);
+    void pushBookingToGoogle(this.store, booking);
     return { ok: true, booking };
   }
 

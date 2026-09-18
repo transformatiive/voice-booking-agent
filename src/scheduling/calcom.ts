@@ -3,6 +3,7 @@ import type { Booking, Business, Service } from "../domain/types.js";
 import { pickResourceForService } from "../domain/assignment.js";
 import type { Store } from "../store/store.js";
 import type { BookInput, BookResult, Scheduler, Slot } from "./scheduler.js";
+import { pushBookingToGoogle } from "./googleCalendar.js";
 import { InMemoryScheduler } from "./inMemoryScheduler.js";
 
 const CAL_API_VERSION = "2024-08-13";
@@ -125,9 +126,11 @@ export class CalComScheduler implements Scheduler {
         end: end.toISOString(),
         source: input.source,
         calBookingUid: data.data?.uid ?? null,
+        googleEventId: null,
         createdAt: new Date().toISOString(),
       };
       this.store.addBooking(booking);
+      void pushBookingToGoogle(this.store, booking);
       return { ok: true, booking };
     } catch {
       return this.fallback.book(input);
