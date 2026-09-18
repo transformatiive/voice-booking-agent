@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 /* ------------------------------------------------------------------ tokens */
 
@@ -116,6 +116,16 @@ interface Payload {
 
 type Tab = "agenda" | "chamadas" | "recursos" | "servicos" | "horarios" | "assistente" | "faturacao";
 type View = "day" | "week" | "month";
+
+const TAB_IDS: Tab[] = ["agenda", "chamadas", "recursos", "servicos", "horarios", "assistente", "faturacao"];
+
+function tabFromLocation(): Tab {
+  if (typeof window === "undefined") return "agenda";
+  const query = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+  if (query && TAB_IDS.includes(query)) return query;
+  const hash = window.location.hash.replace(/^#/, "") as Tab;
+  return TAB_IDS.includes(hash) ? hash : "agenda";
+}
 
 /* --------------------------------------------------------------- date util */
 
@@ -283,9 +293,27 @@ const NAV: Array<[Tab, string]> = [
 
 export function Backoffice() {
   const { slug = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const [state, setState] = useState<Payload | null>(null);
-  const [tab, setTab] = useState<Tab>("agenda");
+  const [tab, setTab] = useState<Tab>(() => tabFromLocation());
   const [flash, setFlash] = useState("");
+
+  useEffect(() => {
+    const next = searchParams.get("tab");
+    if (next && TAB_IDS.includes(next as Tab)) {
+      setTab(next as Tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const onHash = () => setTab(tabFromLocation());
+    window.addEventListener("hashchange", onHash);
+    window.addEventListener("popstate", onHash);
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("popstate", onHash);
+    };
+  }, []);
 
   async function load() {
     const res = await fetch(`/api/business/${slug}`);
