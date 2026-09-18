@@ -481,11 +481,26 @@ app.get(["/termos", "/terms"], (_req, res) => res.sendFile(join(publicDir, "term
 app.get(["/dpa", "/data-processing"], (_req, res) => res.sendFile(join(publicDir, "dpa.html")));
 
 app.use(express.static(publicDir, { index: false }));
+
+app.get("/", (_req, res, next) => {
+  const landing = join(publicDir, "index.html");
+  if (existsSync(landing)) {
+    res.sendFile(landing);
+    return;
+  }
+  const spa = join(webDist, "index.html");
+  if (existsSync(spa)) {
+    res.sendFile(spa);
+    return;
+  }
+  next();
+});
+
 if (existsSync(webDist)) {
-  app.use(express.static(webDist));
+  app.use(express.static(webDist, { index: false }));
 }
 
-app.get(["/", "/app/:slug", "/demo/:slug"], (req, res, next) => {
+app.get(["/app/:slug", "/demo/:slug"], (req, res, next) => {
   const spa = join(webDist, "index.html");
   if (existsSync(spa)) {
     res.sendFile(spa);
