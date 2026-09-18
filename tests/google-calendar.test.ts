@@ -116,7 +116,7 @@ describe("person/account + Google Calendar persistence", () => {
       businessId: business.id,
       serviceId: business.services[0].id,
       serviceName: "Consulta",
-      resourceId: null,
+      resourceId: business.resources[0].id,
       customerName: "Ana",
       customerPhone: "+351910000001",
       start: new Date(Date.now() + 86_400_000).toISOString(),
