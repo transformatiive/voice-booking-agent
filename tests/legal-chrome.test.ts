@@ -35,9 +35,23 @@ describe("teal chrome on public and backoffice surfaces", () => {
       const html = readFileSync(join(root, "public", file), "utf8");
       expect(html).toContain("/atende.css");
       expect(html).toContain("ATEND");
+      expect(html).toContain('href="/favicon.svg"');
       expect(html).not.toContain("/landing.css");
       expect(html).not.toContain("class=\"logo\"");
     }
+  });
+
+  it("favicon is the teal three-bar ATEND mark, not the purple Cursor icon", () => {
+    const spa = readFileSync(join(root, "web", "index.html"), "utf8");
+    const svg = readFileSync(join(root, "web", "public", "favicon.svg"), "utf8");
+    const publicSvg = readFileSync(join(root, "public", "favicon.svg"), "utf8");
+    expect(spa).toContain('href="/favicon.svg"');
+    expect(svg).toContain("oklch(0.58 0.14 168)");
+    expect(svg).toContain("<rect");
+    expect(svg.match(/<rect /g)?.length).toBe(3);
+    expect(svg).not.toContain("#863bff");
+    expect(svg).not.toContain("#7e14ff");
+    expect(publicSvg).toBe(svg);
   });
 
   it("serves legal pages with teal chrome", async () => {
@@ -51,8 +65,14 @@ describe("teal chrome on public and backoffice surfaces", () => {
       expect(res.status).toBe(200);
       expect(html).toContain("/atende.css");
       expect(html).toContain("ATEND");
+      expect(html).toContain("/favicon.svg");
       expect(html).not.toContain("/landing.css");
     }
+    const icon = await fetch(`http://127.0.0.1:${port}/favicon.svg`);
+    const svg = await icon.text();
+    expect(icon.status).toBe(200);
+    expect(svg).toContain("oklch(0.58 0.14 168)");
+    expect(svg).not.toContain("#863bff");
   });
 
   it("onboard dialog and backoffice no longer use the blocking wait page", () => {
