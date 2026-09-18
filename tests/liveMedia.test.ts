@@ -13,6 +13,7 @@ import {
   spokenCueAfterTool,
 } from "../src/telephony/liveMedia.js";
 import { LIVE_VOICE_MODEL, buildDemoPickerLiveSessionConfig } from "../src/telephony/gptLive.js";
+import { demoVerticalReadyResult } from "../src/telephony/voice.js";
 import { app } from "../src/server.js";
 import { tempStore } from "./helpers.js";
 import { ensureDemoBusinesses } from "../src/store/seed.js";
@@ -355,6 +356,29 @@ describe("spokenCueAfterTool", () => {
     ).toBe("Olá, oficina.");
     expect(spokenCueAfterTool("get_slots", { message: "Tenho vaga às 10h." })).toBeUndefined();
     expect(spokenCueAfterTool("select_demo_vertical", {})).toMatch(/preparar o cenário/);
+  });
+
+  it("oficina ready result commentary asks diagnóstico, revisão or pneus", () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const oficina = store.getBusinessBySlug("oficina-norte")!;
+    const result = demoVerticalReadyResult(oficina);
+    const cue = spokenCueAfterTool("select_demo_vertical", result);
+    expect(cue).toMatch(/diagnóstico/i);
+    expect(cue).toMatch(/revisão/i);
+    expect(cue).toMatch(/pneus/i);
+    expect(cue).not.toMatch(/perfeito|preparar|Olá! Sou/i);
+  });
+
+  it("restaurante ready result commentary asks party size from the seeded menu", () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const restaurante = store.getBusinessBySlug("restaurante-baixa")!;
+    const result = demoVerticalReadyResult(restaurante);
+    const cue = spokenCueAfterTool("select_demo_vertical", result);
+    expect(cue).toMatch(/pessoas/i);
+    expect(cue).toMatch(/2|duas|grupo/i);
+    expect(cue).not.toMatch(/perfeito|preparar|Olá! Sou/i);
   });
 });
 

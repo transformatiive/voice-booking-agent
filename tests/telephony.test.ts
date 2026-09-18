@@ -283,10 +283,16 @@ describe("demo DID picker tools", () => {
     expect(selected.slug).toBe("oficina-norte");
     expect(selected.businessName).toBe("Oficina Norte");
     expect(rememberedDemoSlug({ fromE164: "+351910000077", now: NOW.getTime() })).toBe("oficina-norte");
-    expect(selected.speak).toMatch(/Oficina Norte/);
-    expect(selected.message).toMatch(/Oficina Norte/);
-    expect(String(selected.instruction)).toMatch(/Fala já/);
-    expect(String(selected.instruction)).toMatch(/preparar o cenário/);
+    expect(selected.speak).toMatch(/diagnóstico/i);
+    expect(selected.speak).toMatch(/revisão/i);
+    expect(selected.speak).toMatch(/pneus/i);
+    expect(selected.speak).toMatch(/veículo|carro/i);
+    expect(selected.message).toBe(selected.speak);
+    expect(selected.speak).not.toMatch(/perfeito/i);
+    expect(selected.speak).not.toMatch(/preparar/i);
+    expect(selected.speak).not.toMatch(/Olá! Sou/);
+    expect(selected.speak.split(/[.!?]+/).filter((part) => part.trim()).length).toBeLessThanOrEqual(2);
+    expect(String(selected.instruction)).toMatch(/get_slots|book_appointment/);
     expect(String(selected.instruction)).not.toMatch(/Fuso:|Não te apresentes como uma demo/);
     expect(JSON.stringify(selected)).not.toMatch(/buildLiveInstructions/);
 
@@ -314,6 +320,31 @@ describe("demo DID picker tools", () => {
     expect(store.getBusinessBySlug("oficina-norte")).toBeDefined();
     expect(store.listBookings(store.getBusinessBySlug("oficina-norte")!.id)).toHaveLength(1);
     expect(store.listBookings(store.getBusinessBySlug("clinica-central")!.id)).toHaveLength(0);
+  });
+
+  it("clínica opener names the seeded specialties, not a transition stall", async () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const scheduler = new InMemoryScheduler(store, () => NOW);
+    const selected = (await handleDemoPickerFunction({
+      store,
+      scheduler,
+      call: { name: "select_demo_vertical", arguments: { vertical: "clinica" } },
+      fromE164: "+351910000078",
+      now: NOW,
+    })) as { ok: boolean; slug: string; speak?: string; message?: string; instruction?: string };
+    expect(selected.ok).toBe(true);
+    expect(selected.slug).toBe("clinica-central");
+    expect(selected.speak).toMatch(/clínica geral/i);
+    expect(selected.speak).toMatch(/dermatologia/i);
+    expect(selected.speak).toMatch(/pediatria/i);
+    expect(selected.speak).toMatch(/medicina dentária/i);
+    expect(selected.message).toBe(selected.speak);
+    expect(selected.speak).not.toMatch(/perfeito/i);
+    expect(selected.speak).not.toMatch(/preparar/i);
+    expect(selected.speak).not.toMatch(/Olá! Sou/);
+    expect(selected.speak.split(/[.!?]+/).filter((part) => part.trim()).length).toBeLessThanOrEqual(2);
+    expect(String(selected.instruction)).toMatch(/get_slots|book_appointment/);
   });
 
   it("refuses to book before a vertical is chosen", async () => {
