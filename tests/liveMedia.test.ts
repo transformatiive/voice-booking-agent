@@ -13,10 +13,10 @@ import {
   formatLiveErrorEvent,
   liveInboundLogLine,
   sessionConfigForLiveMedia,
-  spokenCueAfterTool,
 } from "../src/telephony/liveMedia.js";
 import { LIVE_VOICE_MODEL, buildDemoPickerLiveSessionConfig } from "../src/telephony/gptLive.js";
-import { demoVerticalReadyResult } from "../src/telephony/voice.js";
+import { demoVerticalOpener, handleDemoPickerFunction } from "../src/telephony/voice.js";
+import { InMemoryScheduler } from "../src/scheduling/inMemoryScheduler.js";
 import { app } from "../src/server.js";
 import { tempStore } from "./helpers.js";
 import { ensureDemoBusinesses } from "../src/store/seed.js";
@@ -434,6 +434,127 @@ describe("live-media WebSocket route", () => {
     expect(openai.sent.filter((e) => (e as { type?: string }).type === "response.create")).toHaveLength(1);
     expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.instructions.append")).toHaveLength(0);
   });
+
+  it("one Live session: post-choice utterance is the backend's exact first sentence", async () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const now = new Date(2026, 7, 26, 9, 0, 0);
+    const scheduler = new InMemoryScheduler(store, () => now);
+    const oficina = store.getBusinessBySlug("oficina-norte")!;
+    const opener = demoVerticalOpener(oficina);
+    const appLocal = express();
+    const server = createServer(appLocal);
+    servers.push(server);
+    const openai = new MockOpenAiSocket();
+    attachLiveMedia(server, {
+      openaiApiKey: "sk-test",
+      sessionForSlug: () => ({
+        slug: DEMO_PICKER_SLUG,
+        agentName: "Atende",
+        session: pickerSession(),
+      }),
+      handleTool: async (call, ctx) =>
+        handleDemoPickerFunction({
+          store,
+          scheduler,
+          call,
+          fromE164: ctx.fromE164,
+          callSid: ctx.callSid,
+          now,
+        }),
+      connectOpenAi: () => {
+        queueMicrotask(() => openai.emit("open"));
+        return openai;
+      },
+    });
+    const port = await listen(server);
+    const telnyx = new WebSocket(`ws://127.0.0.1:${port}${LIVE_MEDIA_PATH}?slug=${DEMO_PICKER_SLUG}`);
+    sockets.push(telnyx);
+    await new Promise<void>((resolve, reject) => {
+      telnyx.once("open", () => resolve());
+      telnyx.once("error", reject);
+    });
+    telnyx.send(
+      JSON.stringify({
+        event: "start",
+        start: { call_control_id: "v3:exact", from: "+351910000066" },
+      }),
+    );
+    await viWait(() => openai.sent.some((e) => (e as { type?: string }).type === "session.start"));
+    expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
+    const start = openai.sent.find((e) => (e as { type?: string }).type === "session.start") as {
+      session: { instructions: string };
+    };
+    expect(start.session.instructions).toMatch(/na íntegra/);
+    expect(start.session.instructions).toMatch(/palavra por palavra/);
+    expect(start.session.instructions).not.toMatch(/Oficina Norte|Clínica Central/);
+
+    openai.emitJson({ type: "session.started", session: { id: "live_exact" } });
+    await viWait(() => openai.sent.some((e) => (e as { type?: string }).type === "session.commentary.append"));
+    const sentAfterGreeting = openai.sent.length;
+
+    openai.emitJson({
+      type: "response.event",
+      event: {
+        type: "response.output_item.done",
+        item: {
+          type: "function_call",
+          status: "completed",
+          call_id: "call_oficina",
+          name: "select_demo_vertical",
+          arguments: JSON.stringify({ vertical: "oficina" }),
+        },
+      },
+    });
+    await viWait(() => openai.sent.some((e) => (e as { type?: string }).type === "response.create"));
+    const afterChoice = openai.sent.slice(sentAfterGreeting);
+    expect(afterChoice.map((e) => (e as { type: string }).type)).toEqual([
+      "response.item.create",
+      "response.create",
+    ]);
+    const toolOutput = afterChoice[0] as { item: { type: string; call_id: string; output: string } };
+    expect(toolOutput.item.type).toBe("function_call_output");
+    expect(toolOutput.item.call_id).toBe("call_oficina");
+    const payload = JSON.parse(toolOutput.item.output) as { speak: string; message: string };
+    expect(payload.speak).toBe(opener);
+    expect(payload.message).toBe(opener);
+    expect(payload.speak).toBe(
+      "Olá, Oficina Norte — quer Diagnóstico, Revisão ou Pneus? Diga o serviço e o veículo, se o mencionar.",
+    );
+    expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
+    expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.instructions.append")).toHaveLength(0);
+    expect(
+      afterChoice.some((e) => (e as { type?: string }).type === "session.commentary.append"),
+    ).toBe(false);
+
+    openai.emitJson({
+      type: "response.event",
+      event: {
+        type: "response.output_item.done",
+        item: {
+          type: "function_call",
+          status: "completed",
+          call_id: "call_slots",
+          name: "get_slots",
+          arguments: JSON.stringify({ service: "Revisão", date: "2026-08-27" }),
+        },
+      },
+    });
+    await viWait(() =>
+      openai.sent.some((e) => {
+        if ((e as { type?: string }).type !== "response.item.create") return false;
+        return (e as { item?: { call_id?: string } }).item?.call_id === "call_slots";
+      }),
+    );
+    const slotOutput = openai.sent.find((e) => {
+      if ((e as { type?: string }).type !== "response.item.create") return false;
+      return (e as { item?: { call_id?: string } }).item?.call_id === "call_slots";
+    }) as { item: { output: string } };
+    const slots = JSON.parse(slotOutput.item.output) as { slots?: string[]; message?: string };
+    expect(slots.slots?.length).toBeGreaterThan(0);
+    expect(slots.message).toBeTruthy();
+    expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
+  });
 });
 
 describe("sessionConfigForLiveMedia", () => {
@@ -452,38 +573,36 @@ describe("sessionConfigForLiveMedia", () => {
   });
 });
 
-describe("spokenCueAfterTool", () => {
-  it("turns select_demo_vertical speak into live commentary so the call continues", () => {
-    expect(
-      spokenCueAfterTool("select_demo_vertical", { ok: true, speak: "Olá, oficina." }),
-    ).toBe("Olá, oficina.");
-    expect(spokenCueAfterTool("get_slots", { message: "Tenho vaga às 10h." })).toBeUndefined();
-    expect(spokenCueAfterTool("select_demo_vertical", {})).toMatch(/preparar o cenário/);
-  });
-
-  it("oficina ready result is an in-character greeting with real services", () => {
+describe("demoVerticalOpener", () => {
+  it("each seeded vertical's first sentence is the receptionist line, not a transition", () => {
     const store = tempStore();
     ensureDemoBusinesses(store);
-    const oficina = store.getBusinessBySlug("oficina-norte")!;
-    const result = demoVerticalReadyResult(oficina);
-    const cue = spokenCueAfterTool("select_demo_vertical", result);
-    expect(cue).toMatch(/Oficina Norte/);
-    expect(cue).toMatch(/diagnóstico/i);
-    expect(cue).toMatch(/revisão/i);
-    expect(cue).toMatch(/pneus/i);
-    expect(cue).not.toMatch(/perfeito|preparar|Olá! Sou/i);
-  });
-
-  it("restaurante ready result greets as the restaurant and asks party size", () => {
-    const store = tempStore();
-    ensureDemoBusinesses(store);
-    const restaurante = store.getBusinessBySlug("restaurante-baixa")!;
-    const result = demoVerticalReadyResult(restaurante);
-    const cue = spokenCueAfterTool("select_demo_vertical", result);
-    expect(cue).toMatch(/Restaurante Baixa/);
-    expect(cue).toMatch(/pessoas/i);
-    expect(cue).toMatch(/2|duas|grupo/i);
-    expect(cue).not.toMatch(/perfeito|preparar|Olá! Sou/i);
+    const oficina = demoVerticalOpener(store.getBusinessBySlug("oficina-norte")!);
+    expect(oficina).toBe(
+      "Olá, Oficina Norte — quer Diagnóstico, Revisão ou Pneus? Diga o serviço e o veículo, se o mencionar.",
+    );
+    expect(demoVerticalOpener(store.getBusinessBySlug("clinica-central")!)).toMatch(
+      /Olá, Clínica Central\. Que especialidade precisa: Clínica geral, Dermatologia, Pediatria ou Medicina dentária\?/,
+    );
+    expect(demoVerticalOpener(store.getBusinessBySlug("barbearia-lisboa")!)).toMatch(
+      /Olá, Barbearia Lisboa\. O que pretende: Corte de cabelo, Corte \+ barba, Barba ou Corte infantil\?/,
+    );
+    expect(demoVerticalOpener(store.getBusinessBySlug("restaurante-baixa")!)).toBe(
+      "Olá, Restaurante Baixa. Para quantas pessoas é a reserva — duas, quatro ou um grupo?",
+    );
+    expect(demoVerticalOpener(store.getBusinessBySlug("imobiliaria-baixa")!)).toMatch(
+      /Olá, Imobiliária Baixa — quer Visita ao imóvel ou Avaliação\? Diga o imóvel ou a zona\./,
+    );
+    for (const slug of [
+      "clinica-central",
+      "barbearia-lisboa",
+      "restaurante-baixa",
+      "oficina-norte",
+      "imobiliaria-baixa",
+    ]) {
+      const line = demoVerticalOpener(store.getBusinessBySlug(slug)!);
+      expect(line).not.toMatch(/perfeito|preparar|celular|vocês|a gente/i);
+    }
   });
 });
 

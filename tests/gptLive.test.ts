@@ -75,7 +75,7 @@ describe("gpt-live-1 session config", () => {
     expect(String(buildLiveSessionConfig(imobiliaria).instructions)).toMatch(/visitas e avaliações/);
   });
 
-  it("demo DID picker session greets as Atende and embeds every vertical", () => {
+  it("demo DID picker is one session that speaks the backend speak field in full", () => {
     const store = tempStore();
     ensureDemoBusinesses(store);
     const businesses = ["clinica-central", "barbearia-lisboa", "restaurante-baixa", "oficina-norte", "imobiliaria-baixa"].map(
@@ -87,21 +87,22 @@ describe("gpt-live-1 session config", () => {
     const session = inbound.session;
     expect(session.model).toBe("gpt-live-1");
     expect(String(session.instructions)).toMatch(/português de Portugal/);
+    expect(String(session.instructions)).toMatch(/telemóvel/);
+    expect(String(session.instructions)).toMatch(/ecrã/);
     expect(String(session.instructions)).toMatch(/Apresenta-te como Atende/);
     expect(String(session.instructions)).toMatch(/1 clínica, 2 barbearia, 3 restaurante, 4 oficina, 5 imobiliária/);
-    expect(String(session.instructions)).toMatch(/select_demo_vertical/);
-    expect(String(session.instructions)).toMatch(/preparar o cenário/);
-    expect(String(session.instructions)).toMatch(/Não digas «perfeito»/);
-    expect(String(session.instructions)).toMatch(/saudação da recepção/);
-    expect(String(session.instructions)).toMatch(/não troca o guião|não troca as instruções|já estão/i);
-    expect(String(session.delegation && (session.delegation as { responses?: { instructions?: string } }).responses?.instructions)).toMatch(
-      /speak|immediately|do not wait|instruction swap/i,
-    );
-    expect(String(session.instructions)).toMatch(/Clínica Central/);
-    expect(String(session.instructions)).toMatch(/Oficina Norte/);
-    expect(String(session.instructions)).toMatch(/Nunca dês conselhos médicos/);
-    expect(String(session.instructions)).toMatch(/reservas de mesa/);
+    expect(String(session.instructions)).toMatch(/na íntegra/);
+    expect(String(session.instructions)).toMatch(/palavra por palavra/);
+    expect(String(session.instructions)).toMatch(/só falas o speak\/message/);
     expect(String(session.instructions)).not.toMatch(/Sofia/);
+    expect(String(session.instructions)).not.toMatch(/Fuso:|Não te apresentes como uma demo/);
+    expect(String(session.instructions)).not.toMatch(/Clínica Central|Oficina Norte/);
+    const backend = String(
+      session.delegation && (session.delegation as { responses?: { instructions?: string } }).responses?.instructions,
+    );
+    expect(backend).toMatch(/select_demo_vertical/);
+    expect(backend).toMatch(/exact first sentence|speak\/message/);
+    expect(backend).toMatch(/oficina-norte/);
     const names = (session.delegation as { responses: { tools: Array<{ name: string }> } }).responses.tools.map(
       (t) => t.name,
     );
