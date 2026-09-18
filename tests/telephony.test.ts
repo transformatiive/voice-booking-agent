@@ -283,6 +283,7 @@ describe("demo DID picker tools", () => {
     expect(selected.slug).toBe("oficina-norte");
     expect(selected.businessName).toBe("Oficina Norte");
     expect(rememberedDemoSlug({ fromE164: "+351910000077", now: NOW.getTime() })).toBe("oficina-norte");
+    expect(selected.speak).toMatch(/Oficina Norte/);
     expect(selected.speak).toMatch(/diagnóstico/i);
     expect(selected.speak).toMatch(/revisão/i);
     expect(selected.speak).toMatch(/pneus/i);
@@ -335,6 +336,7 @@ describe("demo DID picker tools", () => {
     })) as { ok: boolean; slug: string; speak?: string; message?: string; instruction?: string };
     expect(selected.ok).toBe(true);
     expect(selected.slug).toBe("clinica-central");
+    expect(selected.speak).toMatch(/Clínica Central/);
     expect(selected.speak).toMatch(/clínica geral/i);
     expect(selected.speak).toMatch(/dermatologia/i);
     expect(selected.speak).toMatch(/pediatria/i);

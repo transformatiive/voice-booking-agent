@@ -11,6 +11,7 @@ import {
   attachLiveMedia,
   sessionConfigForLiveMedia,
   spokenCueAfterTool,
+  liveSpeakFollowUpEvents,
 } from "../src/telephony/liveMedia.js";
 import { LIVE_VOICE_MODEL, buildDemoPickerLiveSessionConfig } from "../src/telephony/gptLive.js";
 import { demoVerticalReadyResult } from "../src/telephony/voice.js";
@@ -224,7 +225,7 @@ describe("live-media WebSocket route", () => {
     await viWait(() =>
       openai.sent.some((e) => (e as { type?: string }).type === "response.item.create") &&
       openai.sent.some((e) => (e as { type?: string }).type === "response.create") &&
-      openai.sent.some((e) => (e as { type?: string }).type === "session.commentary.append"),
+      openai.sent.some((e) => (e as { type?: string }).type === "session.instructions.append"),
     );
     const toolOutput = openai.sent.find((e) => (e as { type?: string }).type === "response.item.create") as {
       item: { type: string; call_id: string; output: string };
@@ -234,13 +235,25 @@ describe("live-media WebSocket route", () => {
     expect(JSON.parse(toolOutput.item.output)).toEqual(
       expect.objectContaining({ ok: true, speak: "Olá, oficina." }),
     );
-    const spoken = openai.sent.find(
+    const greet = openai.sent.find(
+      (e) => (e as { type?: string }).type === "session.instructions.append",
+    ) as { type: string; delegation_id: null; content: string };
+    expect(greet.delegation_id).toBeNull();
+    expect(greet.content).toMatch(/Cumprimenta já/);
+    expect(greet.content).toMatch(/Olá, oficina/);
+    expect(greet.content).not.toMatch(/Fuso:|Não te apresentes como uma demo/);
+    const begin = openai.sent.find(
+      (e) =>
+        (e as { type?: string }).type === "session.commentary.append" &&
+        String((e as { content?: string }).content).includes("Diz agora a saudação"),
+    ) as { type: string; content: string };
+    expect(begin.content).toMatch(/Começa a conversa/);
+    const commentaryWithSpeak = openai.sent.find(
       (e) =>
         (e as { type?: string }).type === "session.commentary.append" &&
         String((e as { content?: string }).content).includes("Olá, oficina"),
-    ) as { type: string; delegation_id: null; content: string };
-    expect(spoken.delegation_id).toBeNull();
-    expect(spoken.content).toMatch(/Olá, oficina/);
+    );
+    expect(commentaryWithSpeak).toBeUndefined();
   });
 
   it("after select_demo_vertical, continues speech then accepts the next booking tool turn", async () => {
@@ -300,7 +313,7 @@ describe("live-media WebSocket route", () => {
     await viWait(() =>
       openai.sent.some(
         (e) =>
-          (e as { type?: string }).type === "session.commentary.append" &&
+          (e as { type?: string }).type === "session.instructions.append" &&
           String((e as { content?: string }).content).includes("Olá, oficina"),
       ),
     );
@@ -358,27 +371,54 @@ describe("spokenCueAfterTool", () => {
     expect(spokenCueAfterTool("select_demo_vertical", {})).toMatch(/preparar o cenário/);
   });
 
-  it("oficina ready result commentary asks diagnóstico, revisão or pneus", () => {
+  it("oficina ready result is an in-character greeting with real services", () => {
     const store = tempStore();
     ensureDemoBusinesses(store);
     const oficina = store.getBusinessBySlug("oficina-norte")!;
     const result = demoVerticalReadyResult(oficina);
     const cue = spokenCueAfterTool("select_demo_vertical", result);
+    expect(cue).toMatch(/Oficina Norte/);
     expect(cue).toMatch(/diagnóstico/i);
     expect(cue).toMatch(/revisão/i);
     expect(cue).toMatch(/pneus/i);
     expect(cue).not.toMatch(/perfeito|preparar|Olá! Sou/i);
   });
 
-  it("restaurante ready result commentary asks party size from the seeded menu", () => {
+  it("restaurante ready result greets as the restaurant and asks party size", () => {
     const store = tempStore();
     ensureDemoBusinesses(store);
     const restaurante = store.getBusinessBySlug("restaurante-baixa")!;
     const result = demoVerticalReadyResult(restaurante);
     const cue = spokenCueAfterTool("select_demo_vertical", result);
+    expect(cue).toMatch(/Restaurante Baixa/);
     expect(cue).toMatch(/pessoas/i);
     expect(cue).toMatch(/2|duas|grupo/i);
     expect(cue).not.toMatch(/perfeito|preparar|Olá! Sou/i);
+  });
+});
+
+describe("liveSpeakFollowUpEvents", () => {
+  it("asks gpt-live to speak now via instructions.append, not commentary-only", () => {
+    const store = tempStore();
+    ensureDemoBusinesses(store);
+    const oficina = store.getBusinessBySlug("oficina-norte")!;
+    const result = demoVerticalReadyResult(oficina);
+    const events = liveSpeakFollowUpEvents("select_demo_vertical", result, "call_oficina");
+    expect(events.map((e) => e.type)).toEqual([
+      "session.instructions.append",
+      "session.commentary.append",
+    ]);
+    expect(events[0].delegation_id).toBeNull();
+    expect(events[0].content).toMatch(/Cumprimenta já/);
+    expect(events[0].content).toMatch(/sem esperar/);
+    expect(events[0].content).toMatch(/Oficina Norte/);
+    expect(events[0].content).toMatch(/diagnóstico/i);
+    expect(events[0].content).toMatch(/revisão/i);
+    expect(events[0].content).toMatch(/pneus/i);
+    expect(events[0].content).not.toMatch(/Fuso:|Não te apresentes como uma demo/);
+    expect(events[1].content).toMatch(/Diz agora a saudação/);
+    expect(events[1].content).not.toMatch(/diagnóstico/i);
+    expect(liveSpeakFollowUpEvents("get_slots", { message: "Tenho vaga às 10h." }, "x")).toEqual([]);
   });
 });
 

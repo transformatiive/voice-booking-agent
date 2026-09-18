@@ -352,8 +352,8 @@ function joinServiceNames(business: Business): string {
 }
 
 /**
- * First spoken line after the caller locks a demo vertical — the scenario
- * question, not a re-greeting or «perfeito, vamos à oficina».
+ * First spoken line after the caller locks a demo vertical — in-character
+ * receptionist greeting, not «perfeito, vamos à oficina».
  */
 export function demoVerticalOpener(business: Business): string {
   const named = joinServiceNames(business);
@@ -361,29 +361,33 @@ export function demoVerticalOpener(business: Business): string {
   switch (business.useCase) {
     case "oficina":
       return pt
-        ? `Quer ${named}? Diga o serviço e o veículo, se o mencionar.`
-        : `Do you need ${named}? Say the service, and the car if you mention it.`;
+        ? `Olá, ${business.name} — quer ${named}? Diga o serviço e o veículo, se o mencionar.`
+        : `Hello, ${business.name} — do you need ${named}? Say the service, and the car if you mention it.`;
     case "clinica":
       return pt
-        ? `Que especialidade precisa: ${named}?`
-        : `Which specialty do you need: ${named}?`;
+        ? `Olá, ${business.name}. Que especialidade precisa: ${named}?`
+        : `Hello, ${business.name}. Which specialty do you need: ${named}?`;
     case "barbearia":
     case "salao":
-      return pt ? `O que pretende: ${named}?` : `What would you like: ${named}?`;
+      return pt
+        ? `Olá, ${business.name}. O que pretende: ${named}?`
+        : `Hello, ${business.name}. What would you like: ${named}?`;
     case "restaurante":
       return pt
-        ? `Para quantas pessoas é a reserva — duas, quatro ou um grupo?`
-        : `How many people is the table for — two, four, or a group?`;
+        ? `Olá, ${business.name}. Para quantas pessoas é a reserva — duas, quatro ou um grupo?`
+        : `Hello, ${business.name}. How many people is the table for — two, four, or a group?`;
     case "imobiliaria":
       return pt
-        ? `Quer ${named}? Diga o imóvel ou a zona.`
-        : `Would you like ${named}? Say the property or area.`;
+        ? `Olá, ${business.name} — quer ${named}? Diga o imóvel ou a zona.`
+        : `Hello, ${business.name} — would you like ${named}? Say the property or area.`;
     case "ginasio":
-      return pt ? `Que aula pretende: ${named}?` : `Which class would you like: ${named}?`;
+      return pt
+        ? `Olá, ${business.name}. Que aula pretende: ${named}?`
+        : `Hello, ${business.name}. Which class would you like: ${named}?`;
     case "outro":
       return pt
-        ? `O que pretende marcar? Temos ${named}.`
-        : `What would you like to book? We have ${named}.`;
+        ? `Olá, ${business.name}. O que pretende marcar — temos ${named}?`
+        : `Hello, ${business.name}. What would you like to book — we have ${named}?`;
     default: {
       const exhaustive: never = business.useCase;
       throw new Error(`Unknown use case: ${String(exhaustive)}`);
