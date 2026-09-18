@@ -611,6 +611,7 @@ function Agenda({
         customerName: "Google Calendar",
         customerPhone: null,
         source: "google",
+        resourceId: "",
         googleEventId: event.googleEventId,
       }));
     return [...bookings, ...overlay];
