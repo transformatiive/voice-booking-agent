@@ -304,25 +304,36 @@ export function buildLiveSessionConfig(business: Business): Record<string, unkno
 }
 
 /**
- * Design (2): one gpt-live-1 session. The voice prompt is fixed for the call.
- * After the Atende greeting, the model only speaks what the backend returns
- * in speak/message — Live cannot swap instructions mid-session, and
- * commentary.append paraphrases rather than saying the given sentence.
+ * One continuous gpt-live-1 session: Atende picker plus every demo vertical's
+ * full receptionist script from the first second. GPT-Live cannot swap
+ * instructions mid-call; after the caller confirms, the same voice follows
+ * that option's existing rules (services, what to ask, what never to do, tools).
  */
-export function buildDemoPickerLiveInstructions(_businesses: Business[]): string {
+export function buildDemoPickerLiveInstructions(businesses: Business[]): string {
+  const bySlug = new Map(businesses.map((business) => [business.slug, business]));
   const menu = listDemoOptions()
     .map((option, index) => `${index + 1} ${option.label.toLowerCase()}`)
     .join(", ");
+  const blocks = listDemoOptions().map((option, index) => {
+    const business = bySlug.get(option.slug);
+    const rules = business
+      ? buildLiveInstructions(business)
+      : `${option.label}: ${option.hint}.`;
+    return `Opção ${index + 1} (${option.useCase}): depois de confirmada, és a recepção da ${business?.name ?? option.label}. ${rules}`;
+  });
   return [
     `És o ${DEFAULT_AGENT_NAME}, o assistente de voz da Atende.`,
     "Fala sempre português de Portugal (não brasileiro): usa «marcação», «telemóvel», «consulta», «ecrã»; nunca celular, vocês, a gente, horáriozinho.",
     "Esta chamada é a demonstração Atende. A voz é Live desde o primeiro segundo — cumprimenta já, sem esperar que o cliente diga olá.",
     `Apresenta-te como Atende e pergunta qual demonstração o cliente quer ouvir: ${menu}. Aceita o nome ou o número.`,
     "Não digas que estás a transferir nem uses um menu robótico. Continua nesta chamada.",
-    "Até uma ferramenta devolver um campo speak, só cumprimentas e perguntas a opção. Não marques nada.",
-    "Quando uma ferramenta devolver speak ou message, dizes esse texto na íntegra, palavra por palavra, e calas-te a ouvir. Não acrescentes «perfeito», não parafraseies, não inventes a saudação.",
-    "A seguir, só falas o speak/message das ferramentas. Nunca inventes horários livres. Não dês conselhos médicos, jurídicos nem mecânicos.",
+    "Até o cliente confirmar uma opção, não marques nada e não entres na recepção de um negócio.",
+    "Quando confirmar, chama select_demo_vertical com essa opção (nome ou 1-5) e a partir daí segue só as regras dessa opção — o guião completo já está nestas instruções. Se as ferramentas não estiverem disponíveis, entra na mesma na persona certa.",
+    "Não digas «perfeito», «vamos à oficina», nem que estás a transferir ou a preparar. Não acabes a vez nessa confirmação: a tua próxima fala é já a saudação da recepção desse negócio (nome e o primeiro pedido do cenário).",
+    "Quando o select_demo_vertical devolver ok, fala já o speak/message — a saudação em personagem — e continua esse guião (serviços, perguntas, o que nunca fazer, horários reais com as ferramentas). Nunca digas que estás a preparar o cenário, a carregar, a transferir ou à espera de novas instruções: o GPT-Live não troca o guião a meio da chamada; as regras de cada opção já estão aqui.",
+    "Não voltes a listar as opções a menos que peçam para mudar de demonstração.",
     "Respostas curtas, estilo chamada telefónica — uma ou duas frases.",
+    ...blocks,
   ].join(" ");
 }
 
@@ -338,7 +349,7 @@ export function buildDemoPickerBackendInstructions(businesses: Business[]): stri
   return [
     "You are the Atende demo routing backend for a Portuguese (pt-PT) voice call.",
     "Until select_demo_vertical succeeds, do not book. Call select_demo_vertical when the caller names a vertical or 1-5.",
-    "select_demo_vertical returns the exact first sentence in speak/message. That string is the next utterance.",
+    "After select_demo_vertical succeeds, stay on this Live session. The next utterance is the speak/message in-character greeting, then follow that vertical's receptionist script already in the live instructions. Do not stop at «perfeito». Never wait for a new session or an instruction swap.",
     "After that, call get_slots / book_appointment / list_bookings / cancel_appointment for that vertical. Pass vertical on each tool call.",
     `Verticals: ${catalogs}.`,
     "Never invent slots. Never give medical, legal, or mechanical advice.",

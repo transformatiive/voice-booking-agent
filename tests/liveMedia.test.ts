@@ -188,6 +188,11 @@ describe("live-media WebSocket route", () => {
     expect(start.session.type).toBeUndefined();
     expect(start.session.audio.format).toEqual({ type: "audio/pcmu", rate: 8000 });
     expect(start.session.instructions).toMatch(/Apresenta-te como Atende/);
+    expect(start.session.instructions).toMatch(/Clínica Central/);
+    expect(start.session.instructions).toMatch(/Barbearia Lisboa/);
+    expect(start.session.instructions).toMatch(/Restaurante Baixa/);
+    expect(start.session.instructions).toMatch(/Oficina Norte/);
+    expect(start.session.instructions).toMatch(/Imobiliária Baixa/);
     expect(start.session.delegation.responses.tools.map((t) => t.name)[0]).toBe("select_demo_vertical");
 
     openai.emitJson({ type: "session.started", session: { id: "live_demo" } });
@@ -244,6 +249,7 @@ describe("live-media WebSocket route", () => {
     expect(JSON.parse(toolOutput.item.output)).toEqual(
       expect.objectContaining({ ok: true, speak: "Olá, oficina." }),
     );
+    expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
     expect(openai.sent.some((e) => (e as { type?: string }).type === "session.instructions.append")).toBe(false);
   });
 
@@ -309,6 +315,7 @@ describe("live-media WebSocket route", () => {
       }),
     );
     expect(openai.sent.some((e) => (e as { type?: string }).type === "session.instructions.append")).toBe(false);
+    expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
 
     openai.emitJson({
       type: "response.event",
@@ -335,6 +342,7 @@ describe("live-media WebSocket route", () => {
     expect(JSON.parse(slotOutput.item.output)).toEqual(
       expect.objectContaining({ ok: true, slots: ["2026-08-27T10:00:00.000Z"] }),
     );
+    expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.start")).toHaveLength(1);
   });
 
   it("does not continue the Responses backend on function_call_arguments.done", async () => {
@@ -435,7 +443,7 @@ describe("live-media WebSocket route", () => {
     expect(openai.sent.filter((e) => (e as { type?: string }).type === "session.instructions.append")).toHaveLength(0);
   });
 
-  it("one Live session: post-choice utterance is the backend's exact first sentence", async () => {
+  it("one Live session: picker plus every receptionist script; select_demo_vertical does not start a second session", async () => {
     const store = tempStore();
     ensureDemoBusinesses(store);
     const now = new Date(2026, 7, 26, 9, 0, 0);
@@ -485,9 +493,19 @@ describe("live-media WebSocket route", () => {
     const start = openai.sent.find((e) => (e as { type?: string }).type === "session.start") as {
       session: { instructions: string };
     };
-    expect(start.session.instructions).toMatch(/na íntegra/);
-    expect(start.session.instructions).toMatch(/palavra por palavra/);
-    expect(start.session.instructions).not.toMatch(/Oficina Norte|Clínica Central/);
+    expect(start.session.instructions).toMatch(/Apresenta-te como Atende/);
+    expect(start.session.instructions).toMatch(/1 clínica, 2 barbearia, 3 restaurante, 4 oficina, 5 imobiliária/);
+    expect(start.session.instructions).toMatch(/Clínica Central/);
+    expect(start.session.instructions).toMatch(/Nunca dês conselhos médicos/);
+    expect(start.session.instructions).toMatch(/Barbearia Lisboa/);
+    expect(start.session.instructions).toMatch(/Restaurante Baixa/);
+    expect(start.session.instructions).toMatch(/reservas de mesa/);
+    expect(start.session.instructions).toMatch(/Oficina Norte/);
+    expect(start.session.instructions).toMatch(/Diagnóstico/);
+    expect(start.session.instructions).toMatch(/diagnóstico mecânico/);
+    expect(start.session.instructions).toMatch(/Imobiliária Baixa/);
+    expect(start.session.instructions).toMatch(/visitas e avaliações/);
+    expect(start.session.instructions).toMatch(/Não digas «perfeito»/);
 
     openai.emitJson({ type: "session.started", session: { id: "live_exact" } });
     await viWait(() => openai.sent.some((e) => (e as { type?: string }).type === "session.commentary.append"));

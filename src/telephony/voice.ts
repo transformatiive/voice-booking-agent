@@ -426,9 +426,9 @@ function omitPickerKeys(args: Record<string, unknown>): Record<string, unknown> 
 }
 
 /**
- * One Live session for the demo DID. Voice prompt and voice stay fixed: greet, then
- * speak each tool's speak/message in full. select_demo_vertical returns that first
- * sentence and records the choice for later get_slots / book_appointment.
+ * Demo DID picker: one Live session whose instructions already hold every
+ * vertical's receptionist script. select_demo_vertical records the choice so
+ * later get_slots / book_appointment hit that tenant.
  */
 export async function handleDemoPickerFunction(opts: {
   store: Store;
