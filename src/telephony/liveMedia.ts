@@ -230,6 +230,14 @@ class LiveMediaBridge {
     }
     const event = parsed as Record<string, unknown>;
     const type = String(event.type ?? "");
+    if (type === "error") {
+      console.error(`[live-media ${this.opts.inbound.slug}] openai error`, formatLiveErrorEvent(event));
+    } else {
+      const line = liveInboundLogLine(event);
+      if (line) {
+        console.log(`[live-media ${this.opts.inbound.slug}] openai event ${line}`);
+      }
+    }
     switch (type) {
       case "session.started":
         this.sessionReady = true;
@@ -258,7 +266,6 @@ class LiveMediaBridge {
         this.closeBoth("openai");
         return;
       case "error":
-        console.error(`[live-media ${this.opts.inbound.slug}] openai error`, JSON.stringify(event).slice(0, 400));
         return;
       default:
         return;
@@ -266,31 +273,34 @@ class LiveMediaBridge {
   }
 
   private async onDelegatedEvent(inner: Record<string, unknown>): Promise<void> {
-    const innerType = String(inner.type ?? "");
-    if (innerType !== "response.output_item.done" && innerType !== "response.function_call_arguments.done") {
+    const call = completedFunctionCallFromDelegatedEvent(inner);
+    if (!call) {
+      if (
+        String(inner.type ?? "") === "response.output_item.done" &&
+        inner.item &&
+        typeof inner.item === "object" &&
+        !Array.isArray(inner.item) &&
+        String((inner.item as Record<string, unknown>).type ?? "") === "function_call"
+      ) {
+        console.error(
+          `[live-media ${this.opts.inbound.slug}] skip function_call without item.call_id`,
+          formatLiveErrorEvent(inner),
+        );
+      }
       return;
     }
-    const item = inner.item && typeof inner.item === "object" ? (inner.item as Record<string, unknown>) : inner;
-    if (String(item.type ?? "") !== "function_call") {
+    if (this.handledTools.has(call.callId)) {
       return;
     }
-    if (item.status && item.status !== "completed") {
-      return;
-    }
-    const name = String(item.name ?? "");
-    const callId = String(item.call_id ?? item.id ?? name);
-    if (!name || this.handledTools.has(callId)) {
-      return;
-    }
-    this.handledTools.add(callId);
+    this.handledTools.add(call.callId);
     let output: Record<string, unknown>;
     try {
       output = await this.opts.handleTool(
-        { name, arguments: parseToolArguments(item.arguments) },
+        { name: call.name, arguments: call.arguments },
         { slug: this.opts.inbound.slug, fromE164: this.fromE164, callSid: this.callSid },
       );
     } catch (err) {
-      console.error(`[live-media ${this.opts.inbound.slug}] tool ${name}`, err instanceof Error ? err.message : err);
+      console.error(`[live-media ${this.opts.inbound.slug}] tool ${call.name}`, err instanceof Error ? err.message : err);
       output = {
         error: "tool_failed",
         instruction: "Continua a falar. Oferece uma hora próxima e pergunta se serve.",
@@ -298,17 +308,14 @@ class LiveMediaBridge {
     }
     this.sendOpenAi({
       type: "response.item.create",
-      event_id: `tool-out-${callId}`,
+      event_id: `tool-out-${call.callId}`,
       item: {
         type: "function_call_output",
-        call_id: callId,
+        call_id: call.callId,
         output: JSON.stringify(output),
       },
     });
-    this.sendOpenAi({ type: "response.create", event_id: `tool-continue-${callId}` });
-    for (const event of liveSpeakFollowUpEvents(name, output, callId)) {
-      this.sendOpenAi(event);
-    }
+    this.sendOpenAi({ type: "response.create", event_id: `tool-continue-${call.callId}` });
   }
 
   private sendOpenAi(event: Record<string, unknown>): void {
@@ -352,48 +359,61 @@ function stringField(rec: Record<string, unknown>, key: string): string | undefi
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-/**
- * GPT-Live `response.create` continues the Responses backend; it does not make the
- * voice speak. Docs: request a greeting with `session.instructions.append`
- * (speak immediately, without waiting for the caller), then a short
- * `session.commentary.append` to begin. Commentary alone is paraphrasable
- * context and does not start audio after a finished «perfeito» turn.
- */
-export type LiveSpeakFollowUpEvent = {
-  type: "session.instructions.append" | "session.commentary.append";
-  event_id: string;
-  delegation_id: null;
-  content: string;
+const AUDIO_EVENT_TYPES = new Set(["session.output_audio.delta", "session.input_audio.append"]);
+
+/** Full error payload — production sliced this at 400 chars and hid the Responses cause. */
+export function formatLiveErrorEvent(event: Record<string, unknown>): string {
+  return JSON.stringify(event);
+}
+
+/** Inbound GPT-Live event type for logs. Omits audio payloads. */
+export function liveInboundLogLine(event: Record<string, unknown>): string | undefined {
+  const type = String(event.type ?? "");
+  if (AUDIO_EVENT_TYPES.has(type)) {
+    return undefined;
+  }
+  if (type === "response.event") {
+    const inner = event.event && typeof event.event === "object" ? (event.event as Record<string, unknown>) : undefined;
+    const innerType = inner ? String(inner.type ?? "") : "";
+    return innerType ? `response.event ${innerType}` : "response.event";
+  }
+  return type || undefined;
+}
+
+export type CompletedLiveFunctionCall = {
+  name: string;
+  callId: string;
+  arguments: Record<string, unknown>;
 };
 
-export function liveSpeakFollowUpEvents(
-  name: string,
-  output: Record<string, unknown>,
-  callId: string,
-): LiveSpeakFollowUpEvent[] {
-  const speak = spokenCueAfterTool(name, output);
-  if (!speak) {
-    return [];
+/**
+ * Docs: read completed calls from nested `response.output_item.done` only.
+ * `response.function_call_arguments.done` is not sufficient. Require `item.call_id`
+ * — never `item.id` or the tool name — or Responses returns invalid_request_error.
+ */
+export function completedFunctionCallFromDelegatedEvent(
+  inner: Record<string, unknown>,
+): CompletedLiveFunctionCall | undefined {
+  if (String(inner.type ?? "") !== "response.output_item.done") {
+    return undefined;
   }
-  const businessName = stringField(output, "businessName") ?? "negócio";
-  return [
-    {
-      type: "session.instructions.append",
-      event_id: `tool-greet-${callId}`,
-      delegation_id: null,
-      content: [
-        `És agora a recepção da ${businessName}. Fala português de Portugal.`,
-        `Cumprimenta já, sem esperar que o cliente fale, com esta saudação: «${speak}».`,
-        "Não digas «perfeito», nem que estás a preparar, a carregar ou a transferir. Depois pausa e ouve.",
-      ].join(" "),
-    },
-    {
-      type: "session.commentary.append",
-      event_id: `tool-begin-${callId}`,
-      delegation_id: null,
-      content: "Diz agora a saudação. Começa a conversa, seguindo as instruções.",
-    },
-  ];
+  const item = inner.item;
+  if (!item || typeof item !== "object" || Array.isArray(item)) {
+    return undefined;
+  }
+  const rec = item as Record<string, unknown>;
+  if (String(rec.type ?? "") !== "function_call") {
+    return undefined;
+  }
+  if (rec.status && rec.status !== "completed") {
+    return undefined;
+  }
+  const name = stringField(rec, "name");
+  const callId = stringField(rec, "call_id");
+  if (!name || !callId) {
+    return undefined;
+  }
+  return { name, callId, arguments: parseToolArguments(rec.arguments) };
 }
 
 export function spokenCueAfterTool(name: string, output: Record<string, unknown>): string | undefined {
