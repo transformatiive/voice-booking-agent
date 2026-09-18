@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 
 /* ------------------------------------------------------------------ tokens */
@@ -27,6 +27,11 @@ const DAY_NAMES = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", 
 
 /* ------------------------------------------------------------------- types */
 
+interface DayHours {
+  open: number | null;
+  close: number | null;
+}
+
 interface Business {
   name: string;
   slug: string;
@@ -38,11 +43,38 @@ interface Business {
   contactEmail: string | null;
   numberPreference: string;
   number: { e164: string; status: string } | null;
-  hours: Array<{ open: number | null; close: number | null }>;
-  services: Array<{ id: string; name: string; durationMinutes: number }>;
-  resources: Array<{ id: string; name: string; available: boolean; transferNumber: string | null }>;
-  subscription: { planId: string; status: string; usedMinutes: number; includedMinutes: number };
-  plan: { name: string; displayName: string; priceCents: number };
+  hours: DayHours[];
+  services: Array<{ id: string; name: string; durationMinutes: number; priceCents: number | null }>;
+  resources: Array<{
+    id: string;
+    name: string;
+    role: string;
+    serviceIds: string[];
+    hours: DayHours[] | null;
+    available: boolean;
+    transferNumber: string | null;
+  }>;
+  subscription: {
+    planId: string;
+    status: string;
+    usedMinutes: number;
+    includedMinutes: number;
+    overageMinutes: number;
+    planStartedAt: string;
+    currentPeriodStart: string | null;
+    currentPeriodEnd: string | null;
+  };
+  plan: {
+    id: string;
+    name: string;
+    displayName: string;
+    priceCents: number;
+    includedMinutes: number;
+    overageCentsPerMinute: number;
+    features: string[];
+  };
+  agentScript: string;
+  agentKnowledge: string;
 }
 
 interface Booking {
@@ -52,12 +84,34 @@ interface Booking {
   customerName: string | null;
   customerPhone: string | null;
   source: string;
+  resourceId: string;
+}
+
+interface CallRow {
+  id: string;
+  fromE164: string | null;
+  toE164: string | null;
+  startedAt: string;
+  durationSeconds: number;
+  billedMinutes: number;
+  overageMinutes: number;
+  status: string;
+  provider: string;
+}
+
+interface UsageSource {
+  kind: string;
+  e164: string | null;
+  display: string | null;
+  nsn?: string;
 }
 
 interface Payload {
   business: Business;
   bookings: Booking[];
+  calls: CallRow[];
   features: { demoActivate?: boolean; stripe?: boolean; gptLive?: boolean };
+  usageSource?: UsageSource;
 }
 
 type Tab = "agenda" | "chamadas" | "recursos" | "servicos" | "horarios" | "assistente" | "faturacao";
@@ -88,6 +142,13 @@ function toMin(value: string) {
 function timeOf(isoString: string) {
   const d = new Date(isoString);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function formatWhen(isoString: string) {
+  const d = new Date(isoString);
+  return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)} ${timeOf(isoString)}`;
+}
+function euros(cents: number) {
+  return `${(cents / 100).toFixed(2)}€`;
 }
 function labelUseCase(u: string) {
   const map: Record<string, string> = {
@@ -249,6 +310,23 @@ export function Backoffice() {
     }
   }
 
+  async function saveHours(hours: DayHours[] | null, resourceId: string | null) {
+    if (!resourceId) {
+      if (hours) await patch({ hours });
+      return;
+    }
+    const res = await fetch(`/api/business/${slug}/resources/${resourceId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hours }),
+    });
+    if (res.ok) {
+      await load();
+      setFlash("Guardado.");
+      setTimeout(() => setFlash(""), 2500);
+    }
+  }
+
   if (!state) {
     return <div style={{ fontFamily: SANS, color: MUTED, padding: 32 }}>A carregar…</div>;
   }
@@ -279,6 +357,7 @@ export function Backoffice() {
 
         <div style={{ padding: 14, borderRadius: 14, background: "rgba(255,255,255,0.05)" }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{b.name}</div>
+          <div style={{ fontSize: 12, marginTop: 4, color: "#93a7b6" }}>{labelUseCase(b.useCase)}</div>
           <div style={{ fontFamily: MONO, fontSize: 12, marginTop: 5, color: "#93a7b6" }}>
             {b.number?.e164 ?? "sem número"}
           </div>
@@ -349,17 +428,14 @@ export function Backoffice() {
         ) : null}
 
         {tab === "agenda" ? <Agenda bookings={state.bookings} /> : null}
-        {tab === "chamadas" ? <Chamadas bookings={state.bookings} /> : null}
-        {tab === "recursos" ? (
-          <Recursos
-            business={b}
-            onToggle={(id) => void fetch(`/api/business/${slug}/resource/${id}/toggle`, { method: "POST" }).then(load)}
-          />
+        {tab === "chamadas" ? <Chamadas calls={state.calls ?? []} usageSource={state.usageSource} /> : null}
+        {tab === "recursos" ? <Recursos business={b} slug={slug} onChange={load} /> : null}
+        {tab === "servicos" ? <Servicos business={b} slug={slug} onChange={load} /> : null}
+        {tab === "horarios" ? <Horarios business={b} onSaveHours={(hours, resourceId) => void saveHours(hours, resourceId)} /> : null}
+        {tab === "assistente" ? <Assistente business={b} slug={slug} onSave={(body) => void patch(body)} /> : null}
+        {tab === "faturacao" ? (
+          <Faturacao business={b} slug={slug} usedPct={usedPct} usageSource={state.usageSource} onChanged={load} />
         ) : null}
-        {tab === "servicos" ? <Servicos business={b} /> : null}
-        {tab === "horarios" ? <Horarios business={b} onSave={(hours) => void patch({ hours })} /> : null}
-        {tab === "assistente" ? <Assistente business={b} onSave={(body) => void patch(body)} /> : null}
-        {tab === "faturacao" ? <Faturacao business={b} usedPct={usedPct} /> : null}
       </main>
     </div>
   );
@@ -367,7 +443,7 @@ export function Backoffice() {
 
 /* ------------------------------------------------------------------ shared */
 
-function Panel({ title, copy, right, children }: { title: string; copy?: string; right?: React.ReactNode; children: React.ReactNode }) {
+function Panel({ title, copy, right, children }: { title: string; copy?: string; right?: ReactNode; children: ReactNode }) {
   return (
     <div style={{ borderRadius: 22, background: "#fff", border: `1px solid ${LINE}`, overflow: "hidden" }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "20px 22px", borderBottom: `1px solid ${LINE}` }}>
@@ -382,7 +458,7 @@ function Panel({ title, copy, right, children }: { title: string; copy?: string;
   );
 }
 
-function Tag({ children, strong }: { children: React.ReactNode; strong?: boolean }) {
+function Tag({ children, strong }: { children: ReactNode; strong?: boolean }) {
   return (
     <span
       style={{
@@ -396,15 +472,16 @@ function Tag({ children, strong }: { children: React.ReactNode; strong?: boolean
   );
 }
 
-function PrimaryButton({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
+function PrimaryButton({ children, onClick, disabled }: { children: ReactNode; onClick?: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       style={{
-        border: 0, cursor: "pointer", padding: "14px 26px", borderRadius: 999,
+        border: 0, cursor: disabled ? "default" : "pointer", padding: "14px 26px", borderRadius: 999,
         background: ACCENT, color: "#fff", fontFamily: SANS, fontSize: 15, fontWeight: 700,
-        boxShadow: `0 14px 28px -16px ${ACCENT}`,
+        boxShadow: `0 14px 28px -16px ${ACCENT}`, opacity: disabled ? 0.55 : 1,
       }}
     >
       {children}
@@ -453,7 +530,7 @@ function Agenda({ bookings }: { bookings: Booking[] }) {
       : `${MONTHS[cursor.getMonth()]} de ${cursor.getFullYear()}`;
 
   const dayItems = byDate[iso(cursor)] ?? [];
-  const callsToday = (byDate[todayKey] ?? []).filter((b) => b.source === "call").length;
+  const callsToday = (byDate[todayKey] ?? []).filter((b) => b.source === "voice").length;
   const totalToday = (byDate[todayKey] ?? []).length;
 
   const seg = (id: View) => ({
@@ -549,7 +626,7 @@ function DayView({ items }: { items: Booking[] }) {
   return (
     <div>
       {items.map((bk) => {
-        const call = bk.source === "call";
+        const call = bk.source === "voice";
         return (
           <div key={bk.id} style={{ display: "grid", gridTemplateColumns: "76px 1fr auto", alignItems: "center", gap: 16, padding: "17px 22px", borderBottom: `1px solid ${HAIRLINE}` }}>
             <span style={{ fontFamily: MONO, fontSize: 14, color: BODY }}>{timeOf(bk.start)}</span>
@@ -589,7 +666,7 @@ function WeekView({ weekStart, byDate, todayKey }: { weekStart: Date; byDate: Re
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "12px 10px" }}>
                 {items.map((bk) => {
-                  const call = bk.source === "call";
+                  const call = bk.source === "voice";
                   return (
                     <div
                       key={bk.id}
@@ -650,7 +727,7 @@ function MonthView({ cursor, byDate, todayKey }: { cursor: Date; byDate: Record<
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
                 {items.slice(0, 2).map((bk) => {
-                  const call = bk.source === "call";
+                  const call = bk.source === "voice";
                   return (
                     <div
                       key={bk.id}
@@ -675,101 +752,427 @@ function MonthView({ cursor, byDate, todayKey }: { cursor: Date; byDate: Record<
 
 /* ---------------------------------------------------------------- chamadas */
 
-function Chamadas({ bookings }: { bookings: Booking[] }) {
-  /* Until /api/calls exists, the call log is derived from bookings created by the assistant. */
-  const calls = bookings.filter((b) => b.source === "call");
+function callStatusLabel(status: string): string {
+  switch (status) {
+    case "completed":
+      return "concluída";
+    case "missed":
+      return "perdida";
+    case "failed":
+      return "falhou";
+    case "in_progress":
+      return "em curso";
+    default:
+      return status;
+  }
+}
+
+function Chamadas({ calls, usageSource }: { calls: CallRow[]; usageSource?: UsageSource }) {
+  const billed = calls.reduce((sum, call) => sum + (call.billedMinutes || 0), 0);
+  const telnyx = usageSource?.kind === "telnyx_demo_did";
+  const copy = telnyx
+    ? `Registos reais Telnyx do DID ${usageSource?.display ?? "+351 21 021 0260"} (210210260). Cada minuto entra no plafond do plano.`
+    : "Chamadas gravadas neste número, com minutos descontados do plano.";
   return (
-    <Panel title="Chamadas" copy="Tudo o que o assistente atendeu, com resultado.">
-      {calls.length === 0 ? (
-        <div style={{ padding: "26px 22px", fontSize: 15, color: MUTED }}>Ainda não há chamadas atendidas.</div>
-      ) : (
-        calls.map((bk) => (
-          <div key={bk.id} style={{ display: "grid", gridTemplateColumns: "86px 1fr 130px", alignItems: "center", gap: 16, padding: "17px 22px", borderBottom: `1px solid ${HAIRLINE}` }}>
-            <span style={{ fontFamily: MONO, fontSize: 14, color: BODY }}>{timeOf(bk.start)}</span>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>Marcou {bk.serviceName}</div>
-              <div style={{ fontSize: 14, color: MUTED, marginTop: 2 }}>
-                {bk.customerName || "Sem nome"}
-                {bk.customerPhone ? ` · ${bk.customerPhone}` : ""}
-              </div>
-            </div>
-            <span style={{ justifySelf: "start" }}>
-              <Tag strong>marcada</Tag>
-            </span>
+    <>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+        <Kpi label="Chamadas" value={String(calls.length)} />
+        <Kpi label="Minutos facturados" value={String(billed)} accent />
+        <Kpi label="DID" value={usageSource?.display ?? "—"} />
+      </div>
+      <Panel title="Chamadas" copy={copy}>
+        {calls.length === 0 ? (
+          <div style={{ padding: "26px 22px", fontSize: 15, color: MUTED }}>
+            Ainda não há registos Telnyx para este número. Não inventamos minutos.
           </div>
-        ))
-      )}
-    </Panel>
+        ) : (
+          calls.map((call) => (
+            <div
+              key={call.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "110px 1fr auto",
+                alignItems: "center",
+                gap: 16,
+                padding: "17px 22px",
+                borderBottom: `1px solid ${HAIRLINE}`,
+              }}
+            >
+              <span style={{ fontFamily: MONO, fontSize: 13, color: BODY }}>{formatWhen(call.startedAt)}</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{call.fromE164 || "Número oculto"}</div>
+                <div style={{ fontSize: 14, color: MUTED, marginTop: 2 }}>
+                  {call.durationSeconds}s · {call.billedMinutes} min
+                  {call.overageMinutes ? ` · ${call.overageMinutes} extra` : ""}
+                  {call.provider ? ` · ${call.provider}` : ""}
+                </div>
+              </div>
+              <Tag strong={call.status === "completed"}>{callStatusLabel(call.status)}</Tag>
+            </div>
+          ))
+        )}
+      </Panel>
+    </>
   );
 }
 
 /* ---------------------------------------------------------------- recursos */
 
-function Recursos({ business, onToggle }: { business: Business; onToggle: (id: string) => void }) {
+const fieldStyle: CSSProperties = {
+  padding: "13px 14px",
+  borderRadius: 11,
+  border: "1px solid #d7e0e8",
+  background: "#fff",
+  fontFamily: SANS,
+  fontSize: 15,
+  color: INK,
+};
+
+function Recursos({ business, slug, onChange }: { business: Business; slug: string; onChange: () => Promise<void> }) {
+  const empty = { name: "", role: "profissional", transferNumber: "", serviceIds: business.services.map((s) => s.id) };
+  const [editing, setEditing] = useState<string | null>(null);
+
+  async function createResource(body: { name: string; role: string; transferNumber: string; serviceIds: string[] }) {
+    if (!body.name.trim()) return;
+    await fetch(`/api/business/${slug}/resources`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    await onChange();
+  }
+
+  async function saveEdit(id: string, body: Record<string, unknown>) {
+    await fetch(`/api/business/${slug}/resources/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setEditing(null);
+    await onChange();
+  }
+
   return (
-    <Panel title="Recursos" copy="Quem pode receber marcações e transferências agora. Toque para trocar o estado.">
-      {business.resources.map((r) => (
-        <div key={r.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "19px 22px", borderBottom: `1px solid ${HAIRLINE}` }}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>{r.name}</div>
-            <div style={{ fontFamily: MONO, fontSize: 13, color: MUTED, marginTop: 3 }}>
-              {r.transferNumber ? `transfere para ${r.transferNumber}` : "sem transferência"}
+    <Panel
+      title="Recursos"
+      copy="Pessoas que recebem marcações. Cada marcação precisa de um recurso — sem menu IVR."
+    >
+      {business.resources.map((r) => {
+        const assigned = business.services.filter((s) => r.serviceIds?.includes(s.id)).map((s) => s.name);
+        const open = editing === r.id;
+        return (
+          <div key={r.id} style={{ padding: "19px 22px", borderBottom: `1px solid ${HAIRLINE}` }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{r.name}</div>
+                <div style={{ fontSize: 14, color: MUTED, marginTop: 3 }}>
+                  {r.role || "profissional"}
+                  {assigned.length ? ` · ${assigned.join(", ")}` : " · sem serviços"}
+                  {r.transferNumber ? ` · ${r.transferNumber}` : ""}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void fetch(`/api/business/${slug}/resource/${r.id}/toggle`, { method: "POST" }).then(onChange)
+                  }
+                  style={{
+                    padding: "10px 16px", borderRadius: 999, cursor: "pointer", fontFamily: SANS, fontSize: 13.5, fontWeight: 700,
+                    background: r.available ? ACCENT : "#fff",
+                    color: r.available ? "#fff" : BODY,
+                    border: r.available ? 0 : "1px solid #d7e0e8",
+                  }}
+                >
+                  {r.available ? "Disponível" : "Ocupado"}
+                </button>
+                <button
+                  type="button"
+                  className="bo-ghost"
+                  onClick={() => setEditing(open ? null : r.id)}
+                  style={{ padding: "10px 16px", borderRadius: 999, border: "1px solid #d7e0e8", background: "#fff", cursor: "pointer", fontFamily: SANS, fontSize: 13.5, fontWeight: 600, color: BODY }}
+                >
+                  {open ? "Fechar" : "Editar"}
+                </button>
+              </div>
             </div>
+            {open ? (
+              <ResourceForm
+                initial={{ name: r.name, role: r.role, transferNumber: r.transferNumber ?? "", serviceIds: r.serviceIds ?? [] }}
+                services={business.services}
+                onSubmit={(body) => void saveEdit(r.id, body)}
+              />
+            ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => onToggle(r.id)}
-            style={{
-              padding: "10px 16px", borderRadius: 999, cursor: "pointer", fontFamily: SANS, fontSize: 13.5, fontWeight: 700,
-              background: r.available ? ACCENT : "#fff",
-              color: r.available ? "#fff" : BODY,
-              border: r.available ? 0 : "1px solid #d7e0e8",
-            }}
-          >
-            {r.available ? "Disponível" : "Ocupado"}
-          </button>
-        </div>
-      ))}
+        );
+      })}
+      <div style={{ padding: "18px 22px 22px" }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Adicionar pessoa</div>
+        <ResourceForm
+          initial={empty}
+          services={business.services}
+          onSubmit={(body) => void createResource(body)}
+          submitLabel="Adicionar"
+        />
+      </div>
     </Panel>
+  );
+}
+
+function ResourceForm({
+  initial,
+  services,
+  onSubmit,
+  submitLabel = "Guardar",
+}: {
+  initial: { name: string; role: string; transferNumber: string; serviceIds: string[] };
+  services: Business["services"];
+  onSubmit: (body: { name: string; role: string; transferNumber: string; serviceIds: string[] }) => void;
+  submitLabel?: string;
+}) {
+  const [name, setName] = useState(initial.name);
+  const [role, setRole] = useState(initial.role);
+  const [transferNumber, setTransferNumber] = useState(initial.transferNumber);
+  const [serviceIds, setServiceIds] = useState(initial.serviceIds);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10 }}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" style={fieldStyle} />
+        <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Função" style={fieldStyle} />
+        <input value={transferNumber} onChange={(e) => setTransferNumber(e.target.value)} placeholder="Telemóvel" style={fieldStyle} />
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {services.map((service) => {
+          const on = serviceIds.includes(service.id);
+          return (
+            <button
+              key={service.id}
+              type="button"
+              onClick={() =>
+                setServiceIds(on ? serviceIds.filter((id) => id !== service.id) : [...serviceIds, service.id])
+              }
+              style={{
+                padding: "7px 12px", borderRadius: 999, cursor: "pointer", fontFamily: SANS, fontSize: 13, fontWeight: 600,
+                background: on ? ACCENT_SOFT : "#fff", color: on ? ACCENT_DARK : BODY,
+                border: `1px solid ${on ? "transparent" : "#d7e0e8"}`,
+              }}
+            >
+              {service.name}
+            </button>
+          );
+        })}
+      </div>
+      <div>
+        <PrimaryButton onClick={() => onSubmit({ name, role, transferNumber, serviceIds })}>{submitLabel}</PrimaryButton>
+      </div>
+    </div>
   );
 }
 
 /* ---------------------------------------------------------------- serviços */
 
-function Servicos({ business }: { business: Business }) {
+function Servicos({ business, slug, onChange }: { business: Business; slug: string; onChange: () => Promise<void> }) {
+  const [name, setName] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState(30);
+  const [price, setPrice] = useState("");
+  const [resourceIds, setResourceIds] = useState<string[]>(business.resources.map((r) => r.id));
+  const [editing, setEditing] = useState<string | null>(null);
+
+  async function add() {
+    if (!name.trim()) return;
+    await fetch(`/api/business/${slug}/services`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        durationMinutes,
+        priceCents: price === "" ? null : Math.round(Number(price) * 100),
+        resourceIds,
+      }),
+    });
+    setName("");
+    setPrice("");
+    await onChange();
+  }
+
+  async function save(id: string, body: Record<string, unknown>) {
+    await fetch(`/api/business/${slug}/services/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setEditing(null);
+    await onChange();
+  }
+
   return (
-    <Panel
-      title="Serviços"
-      copy="O assistente só marca o que está nesta lista."
-      right={
-        <button type="button" style={{ display: "inline-flex", alignItems: "center", gap: 8, border: 0, cursor: "pointer", padding: "11px 18px", borderRadius: 999, background: INK, color: "#fff", fontFamily: SANS, fontSize: 14, fontWeight: 600 }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Adicionar
-        </button>
-      }
-    >
-      {business.services.map((s) => (
-        <div key={s.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "17px 22px", borderBottom: `1px solid ${HAIRLINE}` }}>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>{s.name}</div>
-          <span style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={{ fontFamily: MONO, fontSize: 14, color: BODY }}>{s.durationMinutes} min</span>
-            <a href="#" style={{ fontSize: 14, fontWeight: 600, color: ACCENT_DARK, textDecoration: "none" }}>Editar</a>
-          </span>
+    <Panel title="Serviços" copy="O assistente só marca o que está nesta lista. Associe pessoas em Recursos.">
+      {business.services.map((s) => {
+        const people = business.resources.filter((r) => r.serviceIds?.includes(s.id)).map((r) => r.name);
+        const open = editing === s.id;
+        return (
+          <div key={s.id} style={{ padding: "17px 22px", borderBottom: `1px solid ${HAIRLINE}` }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>{s.name}</div>
+                <div style={{ fontSize: 14, color: MUTED, marginTop: 3 }}>
+                  {s.durationMinutes} min
+                  {s.priceCents != null ? ` · ${euros(s.priceCents)}` : ""}
+                  {people.length ? ` · ${people.join(", ")}` : " · sem recurso"}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="bo-ghost"
+                onClick={() => setEditing(open ? null : s.id)}
+                style={{ padding: "8px 14px", borderRadius: 999, border: "1px solid #d7e0e8", background: "#fff", cursor: "pointer", fontFamily: SANS, fontSize: 14, fontWeight: 600, color: ACCENT_DARK }}
+              >
+                {open ? "Fechar" : "Editar"}
+              </button>
+            </div>
+            {open ? (
+              <ServiceEdit
+                service={s}
+                resources={business.resources}
+                onSave={(body) => void save(s.id, body)}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+      <div style={{ padding: "18px 22px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 700 }}>Adicionar serviço</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome" style={fieldStyle} />
+          <input
+            type="number"
+            value={durationMinutes}
+            onChange={(e) => setDurationMinutes(Number(e.target.value) || 30)}
+            placeholder="Minutos"
+            style={fieldStyle}
+          />
+          <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Preço € (opcional)" style={fieldStyle} />
         </div>
-      ))}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {business.resources.map((resource) => {
+            const on = resourceIds.includes(resource.id);
+            return (
+              <button
+                key={resource.id}
+                type="button"
+                onClick={() => setResourceIds(on ? resourceIds.filter((id) => id !== resource.id) : [...resourceIds, resource.id])}
+                style={{
+                  padding: "7px 12px", borderRadius: 999, cursor: "pointer", fontFamily: SANS, fontSize: 13, fontWeight: 600,
+                  background: on ? ACCENT_SOFT : "#fff", color: on ? ACCENT_DARK : BODY,
+                  border: `1px solid ${on ? "transparent" : "#d7e0e8"}`,
+                }}
+              >
+                {resource.name}
+              </button>
+            );
+          })}
+        </div>
+        <div>
+          <PrimaryButton onClick={() => void add()}>Adicionar</PrimaryButton>
+        </div>
+      </div>
     </Panel>
+  );
+}
+
+function ServiceEdit({
+  service,
+  resources,
+  onSave,
+}: {
+  service: Business["services"][number];
+  resources: Business["resources"];
+  onSave: (body: Record<string, unknown>) => void;
+}) {
+  const [name, setName] = useState(service.name);
+  const [durationMinutes, setDurationMinutes] = useState(service.durationMinutes);
+  const [price, setPrice] = useState(service.priceCents == null ? "" : String(service.priceCents / 100));
+  const [resourceIds, setResourceIds] = useState(resources.filter((r) => r.serviceIds?.includes(service.id)).map((r) => r.id));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
+        <input value={name} onChange={(e) => setName(e.target.value)} style={fieldStyle} />
+        <input type="number" value={durationMinutes} onChange={(e) => setDurationMinutes(Number(e.target.value) || 30)} style={fieldStyle} />
+        <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Preço €" style={fieldStyle} />
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {resources.map((resource) => {
+          const on = resourceIds.includes(resource.id);
+          return (
+            <button
+              key={resource.id}
+              type="button"
+              onClick={() => setResourceIds(on ? resourceIds.filter((id) => id !== resource.id) : [...resourceIds, resource.id])}
+              style={{
+                padding: "7px 12px", borderRadius: 999, cursor: "pointer", fontFamily: SANS, fontSize: 13, fontWeight: 600,
+                background: on ? ACCENT_SOFT : "#fff", color: on ? ACCENT_DARK : BODY,
+                border: `1px solid ${on ? "transparent" : "#d7e0e8"}`,
+              }}
+            >
+              {resource.name}
+            </button>
+          );
+        })}
+      </div>
+      <PrimaryButton
+        onClick={() =>
+          onSave({
+            name,
+            durationMinutes,
+            priceCents: price === "" ? null : Math.round(Number(price) * 100),
+            resourceIds,
+          })
+        }
+      >
+        Guardar
+      </PrimaryButton>
+    </div>
   );
 }
 
 /* ---------------------------------------------------------------- horários */
 
-function Horarios({ business, onSave }: { business: Business; onSave: (hours: Business["hours"]) => void }) {
-  const [hours, setHours] = useState(business.hours);
+function Horarios({
+  business,
+  onSaveHours,
+}: {
+  business: Business;
+  onSaveHours: (hours: DayHours[] | null, resourceId: string | null) => void;
+}) {
+  const [scope, setScope] = useState<string>("business");
+  const resource = business.resources.find((r) => r.id === scope);
+  const source = scope === "business" ? business.hours : (resource?.hours ?? business.hours);
+  const [hours, setHours] = useState(source);
+  const inherited = scope !== "business" && !resource?.hours;
+
+  useEffect(() => {
+    const next = scope === "business" ? business.hours : (business.resources.find((r) => r.id === scope)?.hours ?? business.hours);
+    setHours(next);
+  }, [scope, business]);
+
   return (
-    <Panel title="Horários" copy="Fora destas horas o assistente informa e não marca.">
+    <Panel
+      title="Horários"
+      copy="Horário do negócio, com opção de horas por pessoa. Um serviço só é marcável se um recurso associado estiver em horas."
+    >
       <div style={{ padding: "6px 22px 22px" }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 8, margin: "12px 0 8px", maxWidth: 360 }}>
+          <span style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 700 }}>Aplicar a</span>
+          <select value={scope} onChange={(e) => setScope(e.target.value)} style={fieldStyle}>
+            <option value="business">Negócio (todos)</option>
+            {business.resources.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
+          </select>
+        </label>
+        {inherited ? (
+          <p style={{ fontSize: 13, color: MUTED }}>A herdar o horário do negócio. Guarde para criar um horário próprio.</p>
+        ) : null}
         {hours.map((day, i) => (
           <div key={DAY_NAMES[i]} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, padding: "13px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
             <span style={{ flex: "1 1 130px", fontSize: 15, fontWeight: 600 }}>{DAY_NAMES[i]}</span>
@@ -789,8 +1192,18 @@ function Horarios({ business, onSave }: { business: Business; onSave: (hours: Bu
             {day.open == null && day.close == null ? <span style={{ fontSize: 13, color: MUTED }}>fechado</span> : null}
           </div>
         ))}
-        <div style={{ marginTop: 20 }}>
-          <PrimaryButton onClick={() => onSave(hours)}>Guardar horários</PrimaryButton>
+        <div style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <PrimaryButton onClick={() => onSaveHours(hours, scope === "business" ? null : scope)}>Guardar horários</PrimaryButton>
+          {scope !== "business" && resource?.hours ? (
+            <button
+              type="button"
+              className="bo-ghost"
+              onClick={() => onSaveHours(null, scope)}
+              style={{ padding: "14px 20px", borderRadius: 999, border: "1px solid #d7e0e8", background: "#fff", cursor: "pointer", fontFamily: SANS, fontSize: 14, fontWeight: 600, color: BODY }}
+            >
+              Herdar do negócio
+            </button>
+          ) : null}
         </div>
       </div>
     </Panel>
@@ -799,24 +1212,61 @@ function Horarios({ business, onSave }: { business: Business; onSave: (hours: Bu
 
 /* -------------------------------------------------------------- assistente */
 
-function Assistente({ business, onSave }: { business: Business; onSave: (body: Record<string, unknown>) => void }) {
+const SCRIPT_GUIDE = [
+  "Escreva como se falasse com um colega novo no telefone — frases curtas, uma ideia de cada vez.",
+  "Diga o que o assistente pode e não pode fazer (ex.: marcar, não dar conselhos clínicos).",
+  "Liste o que deve perguntar: serviço, dia, hora, nome, telemóvel.",
+  "No campo de conhecimento, cole factos: morada, estacionamento, preparação, políticas de cancelamento.",
+  "Evite jargão técnico, menus de teclado e regras contraditórias.",
+];
+
+function Assistente({
+  business,
+  slug,
+  onSave,
+}: {
+  business: Business;
+  slug: string;
+  onSave: (body: Record<string, unknown>) => void;
+}) {
   const [agentName, setAgentName] = useState(business.agentName);
   const [agentGender, setAgentGender] = useState(business.agentGender);
   const [locale, setLocale] = useState(business.locale);
+  const [script, setScript] = useState(business.agentScript || "");
+  const [knowledge, setKnowledge] = useState(business.agentKnowledge || "");
+  const [rewriting, setRewriting] = useState(false);
+  const [rewriteError, setRewriteError] = useState("");
 
-  const field = { padding: "13px 14px", borderRadius: 11, border: "1px solid #d7e0e8", background: "#fff", fontFamily: SANS, fontSize: 15, color: INK };
+  async function rewrite() {
+    setRewriting(true);
+    setRewriteError("");
+    const res = await fetch(`/api/business/${slug}/assistant/rewrite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ script, knowledge }),
+    });
+    const payload = (await res.json()) as { script?: string; error?: string };
+    setRewriting(false);
+    if (payload.script) {
+      setScript(payload.script);
+      return;
+    }
+    setRewriteError(payload.error === "openai_not_configured" ? "OpenAI não configurado." : "Não foi possível reescrever.");
+  }
+
+  const area = { ...fieldStyle, minHeight: 140, fontFamily: SANS, resize: "vertical" as const };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Panel title="Assistente" copy="Como se apresenta ao telefone. Voz ChatGPT Live.">
+      <Panel title="Assistente" copy="Guião pré-preenchido pelo tipo de negócio. Voz ChatGPT Live (gpt-live-1).">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 18, padding: 22 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             <span style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 700 }}>Nome do assistente</span>
-            <input value={agentName} onChange={(e) => setAgentName(e.target.value)} style={field} />
+            <input value={agentName} onChange={(e) => setAgentName(e.target.value)} style={fieldStyle} />
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             <span style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 700 }}>Voz</span>
-            <select value={agentGender} onChange={(e) => setAgentGender(e.target.value)} style={field}>
+            <select value={agentGender} onChange={(e) => setAgentGender(e.target.value)} style={fieldStyle}>
               <option value="feminino">Feminina</option>
               <option value="masculino">Masculina</option>
               <option value="neutro">Neutra</option>
@@ -824,44 +1274,116 @@ function Assistente({ business, onSave }: { business: Business; onSave: (body: R
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             <span style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 700 }}>Idioma</span>
-            <select value={locale} onChange={(e) => setLocale(e.target.value)} style={field}>
+            <select value={locale} onChange={(e) => setLocale(e.target.value)} style={fieldStyle}>
               <option value="pt">Português</option>
               <option value="en">Inglês</option>
             </select>
           </label>
         </div>
+        <div style={{ padding: "0 22px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <span style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 700 }}>Guião de voz</span>
+            <textarea value={script} onChange={(e) => setScript(e.target.value)} style={area} />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <span style={{ fontFamily: DISPLAY, fontSize: 14, fontWeight: 700 }}>Conhecimento (texto)</span>
+            <textarea value={knowledge} onChange={(e) => setKnowledge(e.target.value)} style={area} />
+          </label>
+          <ul style={{ margin: 0, padding: "0 0 0 18px", color: MUTED, fontSize: 13, lineHeight: 1.55 }}>
+            {SCRIPT_GUIDE.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          {rewriteError ? <p style={{ margin: 0, color: "#b42318", fontSize: 14 }}>{rewriteError}</p> : null}
+        </div>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, padding: "0 22px 22px" }}>
-          <PrimaryButton onClick={() => onSave({ agentName, agentGender, locale })}>Guardar</PrimaryButton>
+          <PrimaryButton onClick={() => onSave({ agentName, agentGender, locale, agentScript: script, agentKnowledge: knowledge })}>
+            Guardar
+          </PrimaryButton>
+          <button
+            type="button"
+            className="bo-ghost"
+            disabled={rewriting}
+            onClick={() => void rewrite()}
+            style={{ padding: "14px 24px", borderRadius: 999, border: "1px solid #d7e0e8", background: "#fff", cursor: rewriting ? "default" : "pointer", fontFamily: SANS, fontSize: 15, fontWeight: 600, color: INK }}
+          >
+            {rewriting ? "A reescrever…" : "Reescrever para gpt-live-1"}
+          </button>
           {business.number ? (
             <a
               href={`tel:${business.number.e164}`}
               style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "14px 24px", borderRadius: 999, border: "1px solid #d7e0e8", fontSize: 15, fontWeight: 600, color: INK, textDecoration: "none" }}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
-                <path d="M6.5 3h-.8A2.7 2.7 0 0 0 3 5.7c0 8 7.3 15.3 15.3 15.3a2.7 2.7 0 0 0 2.7-2.7v-.8a1.5 1.5 0 0 0-1.2-1.5l-3.2-.6a1.5 1.5 0 0 0-1.5.7l-.8 1.3a12 12 0 0 1-5.4-5.4l1.3-.8a1.5 1.5 0 0 0 .7-1.5l-.6-3.2A1.5 1.5 0 0 0 6.5 3z" />
-              </svg>
               Ligar e ouvir
             </a>
           ) : null}
         </div>
       </Panel>
-
-      <div style={{ padding: 22, borderRadius: 22, background: PANEL, color: "#a7bac7" }}>
-        <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "#93a7b6" }}>Saudação atual</div>
-        <p style={{ margin: "14px 0 0", fontFamily: DISPLAY, fontSize: 19, fontWeight: 600, lineHeight: 1.45, color: "#fff" }}>
-          “{business.name}, bom dia. Sou {agentName}. Quer marcar ou saber um horário?”
-        </p>
-        <p style={{ margin: "14px 0 0", fontSize: 14, lineHeight: 1.6 }}>
-          Gerada a partir do nome do negócio e dos serviços. Fora de horas informa e não marca.
-        </p>
-      </div>
     </div>
   );
 }
 
 /* --------------------------------------------------------------- faturação */
 
-function Faturacao({ business, usedPct }: { business: Business; usedPct: number }) {
+interface PlanOption {
+  id: string;
+  displayName: string;
+  name: string;
+  priceCents: number;
+  includedMinutes: number;
+  overageCentsPerMinute: number;
+  features: string[];
+}
+
+function formatDay(isoString: string | null): string {
+  if (!isoString) return "—";
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "—";
+  return `${d.getDate()} de ${MONTHS[d.getMonth()]}`;
+}
+
+function Faturacao({
+  business,
+  slug,
+  usedPct,
+  usageSource,
+  onChanged,
+}: {
+  business: Business;
+  slug: string;
+  usedPct: number;
+  usageSource?: UsageSource;
+  onChanged: () => Promise<void>;
+}) {
+  const [plans, setPlans] = useState<PlanOption[]>([]);
+  const [busy, setBusy] = useState("");
+  const remaining = Math.max(0, business.subscription.includedMinutes - business.subscription.usedMinutes);
+  const overage = business.subscription.overageMinutes || Math.max(0, business.subscription.usedMinutes - business.subscription.includedMinutes);
+  const overageCost = overage * (business.plan.overageCentsPerMinute || 0);
+  const telnyx = usageSource?.kind === "telnyx_demo_did";
+
+  useEffect(() => {
+    void fetch("/api/plans")
+      .then((res) => res.json())
+      .then((payload: { plans?: PlanOption[] }) => setPlans(payload.plans ?? []));
+  }, []);
+
+  async function post(path: string, body?: Record<string, unknown>) {
+    setBusy(path);
+    const res = await fetch(`/api/business/${slug}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    });
+    const payload = (await res.json()) as { url?: string; canceled?: boolean; error?: string };
+    setBusy("");
+    if (payload.url) {
+      window.location.href = payload.url;
+      return;
+    }
+    await onChanged();
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 20, padding: 26, borderRadius: 22, background: PANEL, color: "#e8eef2" }}>
@@ -874,17 +1396,21 @@ function Faturacao({ business, usedPct }: { business: Business; usedPct: number 
             <span style={{ fontSize: 16, color: "#93a7b6" }}>/ mês · {business.plan.displayName || business.plan.name}</span>
           </div>
           <p style={{ margin: "12px 0 0", fontSize: 15, lineHeight: 1.6, color: "#a7bac7" }}>
-            {business.subscription.status} · {business.subscription.includedMinutes} minutos incluídos
+            {business.subscription.status} · aniversário {formatDay(business.subscription.currentPeriodEnd || business.subscription.planStartedAt)}
           </p>
         </div>
-        <a href="#" style={{ padding: "14px 24px", borderRadius: 999, background: "#fff", color: INK, fontSize: 15, fontWeight: 700, textDecoration: "none" }}>
-          Mudar de plano
-        </a>
+        <button
+          type="button"
+          onClick={() => void post("/portal")}
+          style={{ padding: "14px 24px", borderRadius: 999, background: "#fff", color: INK, fontSize: 15, fontWeight: 700, border: 0, cursor: "pointer" }}
+        >
+          Portal Stripe
+        </button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 16 }}>
         <div style={{ padding: "20px 22px", borderRadius: 18, background: "#fff", border: `1px solid ${LINE}` }}>
-          <div style={{ fontSize: 13, color: MUTED }}>Minutos usados</div>
+          <div style={{ fontSize: 13, color: MUTED }}>Minutos do plano</div>
           <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 28, letterSpacing: "-0.04em", marginTop: 8 }}>
             {business.subscription.usedMinutes}{" "}
             <span style={{ fontSize: 16, fontWeight: 400, color: MUTED }}>/ {business.subscription.includedMinutes}</span>
@@ -892,19 +1418,58 @@ function Faturacao({ business, usedPct }: { business: Business; usedPct: number 
           <div style={{ height: 6, borderRadius: 99, background: HAIRLINE, marginTop: 12, overflow: "hidden" }}>
             <div style={{ width: `${usedPct}%`, height: "100%", borderRadius: 99, background: ACCENT }} />
           </div>
+          <div style={{ marginTop: 10, fontSize: 13, color: MUTED }}>{remaining} min restantes neste ciclo</div>
+        </div>
+        <div style={{ padding: "20px 22px", borderRadius: 18, background: "#fff", border: `1px solid ${LINE}` }}>
+          <div style={{ fontSize: 13, color: MUTED }}>Extra (além do plafond)</div>
+          <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 28, letterSpacing: "-0.04em", marginTop: 8 }}>
+            {overage} min
+          </div>
+          <div style={{ marginTop: 10, fontSize: 14, color: BODY }}>
+            {overage ? `${euros(overageCost)} a ${business.plan.overageCentsPerMinute} cênt./min` : "Sem extra neste ciclo"}
+          </div>
         </div>
         <div style={{ padding: "20px 22px", borderRadius: 18, background: "#fff", border: `1px solid ${LINE}` }}>
           <div style={{ fontSize: 13, color: MUTED }}>Número</div>
-          <div style={{ fontFamily: MONO, fontSize: 17, marginTop: 10 }}>{business.number?.e164 ?? "—"}</div>
-          <div style={{ marginTop: 10, fontSize: 14, fontWeight: 600, color: ACCENT_DARK }}>{business.number?.status ?? ""}</div>
-        </div>
-        <div style={{ padding: "20px 22px", borderRadius: 18, background: "#fff", border: `1px solid ${LINE}` }}>
-          <div style={{ fontSize: 13, color: MUTED }}>Tipo de negócio</div>
-          <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 22, letterSpacing: "-0.03em", marginTop: 10 }}>
-            {labelUseCase(business.useCase)}
+          <div style={{ fontFamily: MONO, fontSize: 17, marginTop: 10 }}>{usageSource?.display ?? business.number?.e164 ?? "—"}</div>
+          <div style={{ marginTop: 10, fontSize: 14, fontWeight: 600, color: ACCENT_DARK }}>
+            {telnyx ? "Telnyx 210210260" : (business.number?.status ?? "sem número")}
           </div>
         </div>
       </div>
+
+      <Panel title="Planos" copy="Upgrade, downgrade ou cancelamento via Stripe. Extra ao preço de GET /api/plans — nunca um valor inventado.">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 0 }}>
+          {plans.map((plan) => {
+            const current = plan.id === business.subscription.planId;
+            return (
+              <div key={plan.id} style={{ padding: 22, borderRight: `1px solid ${HAIRLINE}` }}>
+                <div style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 700 }}>{plan.displayName || plan.name}</div>
+                <div style={{ fontFamily: DISPLAY, fontSize: 28, fontWeight: 700, marginTop: 8 }}>{(plan.priceCents / 100).toFixed(0)}€</div>
+                <div style={{ fontSize: 13, color: MUTED, marginTop: 6 }}>{plan.includedMinutes} min · {plan.overageCentsPerMinute} cênt. extra</div>
+                <ul style={{ margin: "12px 0 16px", padding: "0 0 0 16px", color: BODY, fontSize: 13, lineHeight: 1.5 }}>
+                  {plan.features.slice(0, 3).map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
+                </ul>
+                <PrimaryButton disabled={current || Boolean(busy)} onClick={() => void post("/checkout", { planId: plan.id })}>
+                  {current ? "Plano atual" : plan.priceCents > business.plan.priceCents ? "Upgrade" : "Downgrade"}
+                </PrimaryButton>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ padding: "0 22px 22px" }}>
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => void post("/billing/cancel")}
+            style={{ border: 0, background: "transparent", color: MUTED, cursor: "pointer", fontFamily: SANS, fontSize: 14, fontWeight: 600 }}
+          >
+            Cancelar no fim do ciclo
+          </button>
+        </div>
+      </Panel>
     </div>
   );
 }
